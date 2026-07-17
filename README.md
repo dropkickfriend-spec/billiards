@@ -1,0 +1,107 @@
+# DEMON BILLIARDS
+### Bureau of Recreational Cosmology · Table Inspection Division
+
+You're a cosmic billiards operator. The objective is simple:
+
+> **Pot the balls. Don't create a universe. Don't create a Mandelbrot set. Don't create a demon.**
+
+The problem is that every shot is recorded by reality.
+
+The balls are fundamental particles, and every collision slightly alters the
+mathematics of reality. Most shots are safe. Some create runaway complexity.
+The referee treats accidentally inventing a cosmos as an ordinary pool foul.
+
+> **FOUL:** Created sentient life. −2 points
+
+## Play
+
+No build step, no dependencies. Either:
+
+- open `index.html` directly in a browser, or
+- serve the folder: `python3 -m http.server` and visit http://localhost:8000
+
+**Controls**
+
+| Input | Action |
+| --- | --- |
+| Click + drag from the cue ball | Aim. The **ghost-ball futures** show the shot's uncertainty cloud |
+| Release | Shoot |
+| `U`, then click the table | Deploy a sanctioned micro-universe (when permits are issued) |
+| `Esc` | Cancel Big Bang placement |
+
+## The core mechanic: ghost-ball futures
+
+When you aim, the game simulates dozens of tiny variations of your shot and
+draws them all — a fan of faint trajectories showing exactly how much
+uncertainty the shot carries. Gentle shots produce a tight cloud. Hard breaks
+produce a chaotic spray. The intended line is drawn brighter through the middle.
+
+Every trajectory you actually shoot is then recorded **permanently** on the
+felt as faint residue. The table slowly accumulates a history of every shot
+ever taken, and that history is not just decoration — it's the third loss
+condition.
+
+## How you lose
+
+**Rule 1 — No Universes.** Every collision generates causal complexity (the
+top meter). Normally it dissipates. But if collisions form a self-sustaining
+causal loop (A → B → C → A) while complexity is critical:
+
+> **GAME OVER — Universe Formation Detected**
+
+The camera zooms into the collision point and galaxies start forming. You've
+created a spacetime region that now requires administration.
+
+**Rule 2 — No Mandelbrot Sets.** Each shot secretly seeds an iteration
+sequence *z = z² + c* near the Mandelbrot boundary; every collision iterates
+it. Most sequences diverge harmlessly. If yours stays bounded, the table
+starts spawning smaller copies of itself — *Iteration 42… 87… 213…* — until:
+
+> **GAME OVER — Mandelbrot Containment Failure**
+
+You accidentally created infinite mathematics. Potting a particle vents
+accumulated mathematics through the pocket aperture.
+
+**Rule 3 — No Demons.** The accumulated trajectory memory is treated as
+information (the bottom meter, *EMERGENT INFORMATION*). The game estimates how
+complex the stored history has become — how poorly it compresses, how
+self-referential it is (new shots retracing old ones), how well it predicts
+future shots. When the memory effectively becomes an entity:
+
+> **GAME OVER — Demon Detected. Emergent Information Structure Exceeds Safe Limits.**
+
+You accidentally created life. **The ideal player doesn't just sink balls —
+they leave behind the simplest possible history.**
+
+## Progression
+
+Eight sectors. Early on it's just *don't create a universe*. Then recursion
+switches on (Rule 2). Sector 4 introduces the memory and Rule 3. Late sectors
+run all three disasters at once with lowered thresholds — and sometimes require
+you to deploy a permitted, pocket-sized Big Bang to move a particle that has
+*declined to participate in causality*.
+
+## Tone
+
+The joke is that everyone in this universe considers accidentally creating a
+cosmos to be a routine billiards mistake. The game never explains whether the
+universes, mathematics, or demons are *actually* being created. It just acts
+like it's obvious.
+
+> Referee Decision: Universe Invalid
+>
+> Shot Cancelled Due To Excessive Ontology
+>
+> Penalty: 2 Points For Demon Formation
+
+## Code layout
+
+- `js/engine.js` — utilities, particles, camera, starfield
+- `js/physics.js` — table geometry, ball collisions, pockets, aim raycasts, and the forward simulator that generates ghost futures
+- `js/cosmic.js` — Rule 1 (causal graph + loop detection) and Rule 2 (the hidden Mandelbrot iterator), plus micro-universe gravity wells
+- `js/memory.js` — Rule 3: the permanent trajectory memory, its compressibility / self-reference / predictiveness estimate, and demon detection
+- `js/levels.js` — the eight sectors and their thresholds
+- `js/game.js` — game states, input, rendering, cinematics, the deadpan referee
+
+Plain ES5-ish scripts on a shared `CB` namespace so the game runs from
+`file://` with no server and no bundler.

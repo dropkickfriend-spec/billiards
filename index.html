@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DEMON BILLIARDS — Bureau of Recreational Cosmology</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="frame">
+  <canvas id="game" width="1280" height="720"></canvas>
+
+  <!-- HUD (drawn over canvas) -->
+  <div id="hud" class="hidden">
+    <div id="hud-left">
+      <div id="hud-level">SECTOR 01</div>
+      <div id="hud-objective">Objective: pot the balls. Do not create a universe.</div>
+    </div>
+    <div id="hud-right">
+      <div id="hud-score">SCORE 0</div>
+      <div id="hud-permits" class="hidden">BIG BANG PERMITS: 0</div>
+    </div>
+  </div>
+
+  <!-- Regulatory meters -->
+  <div id="meter-wrap" class="hidden">
+    <div class="meter-row">
+      <div class="meter-label">CAUSAL COMPLEXITY</div>
+      <div class="meter"><div id="meter-fill" class="fill"></div>
+        <div class="meter-tick" style="left:62%"></div>
+        <div class="meter-tick" style="left:96%"></div>
+      </div>
+    </div>
+    <div class="meter-row">
+      <div class="meter-label">EMERGENT INFORMATION</div>
+      <div class="meter"><div id="onto-fill" class="fill onto"></div>
+        <div class="meter-tick" style="left:70%"></div>
+        <div class="meter-tick" style="left:96%"></div>
+      </div>
+    </div>
+    <div id="meter-zones"><span>STABLE</span><span>ELEVATED</span><span class="danger">GAME OVER</span></div>
+    <div id="iter-readout" class="hidden">Iteration 0…</div>
+  </div>
+
+  <!-- Referee ticker -->
+  <div id="ticker"></div>
+
+  <!-- Title screen -->
+  <div id="screen-title" class="screen">
+    <div class="crest">⛧</div>
+    <h1>DEMON BILLIARDS</h1>
+    <h2>Bureau of Recreational Cosmology · Table Inspection Division</h2>
+    <div class="memo">
+      <p>The oldest civilizations discovered faster-than-light travel, infinite energy,
+      and universe manufacturing. Then they invented billiards, and immediately began
+      causing cosmological disasters.</p>
+      <p>The balls are fundamental particles. Every shot is recorded by reality. When
+      you aim, you see the ghost-ball futures — hundreds of faint trajectories, the
+      cloud of everything the shot could become. The table remembers all of them,
+      permanently.</p>
+      <p><strong>Pot the balls. Don't create a universe. Don't create a Mandelbrot set.
+      Don't create a demon.</strong></p>
+    </div>
+    <button id="btn-start" class="btn">BEGIN INSPECTION</button>
+    <div class="footnote">Form 88-C: the Bureau is not liable for spacetime, mathematics, or life generated during recreation.</div>
+  </div>
+
+  <!-- Level briefing -->
+  <div id="screen-briefing" class="screen hidden">
+    <h2 id="brief-title">SECTOR 01 — ORIENTATION</h2>
+    <div class="memo" id="brief-body"></div>
+    <div class="memo controls">
+      <p><strong>Controls:</strong> click &amp; drag from the cue ball to aim — the ghost-ball futures show the shot's uncertainty cloud; drag further for more power, release to shoot.
+      Every trajectory is stored on the felt permanently. Keep the history simple.
+      <span id="brief-permit-hint" class="hidden"><br><strong>U</strong> — enter Big Bang placement mode, then click the table to deploy a sanctioned micro-universe.</span></p>
+    </div>
+    <button id="btn-begin" class="btn">ACKNOWLEDGE &amp; PROCEED</button>
+  </div>
+
+  <!-- Level complete -->
+  <div id="screen-clear" class="screen hidden">
+    <h1 class="ok">SECTOR CLEARED</h1>
+    <div class="memo" id="clear-body"></div>
+    <button id="btn-next" class="btn">NEXT SECTOR</button>
+  </div>
+
+  <!-- Game over -->
+  <div id="screen-over" class="screen hidden">
+    <h1 class="danger" id="over-title">UNIVERSE DETECTED</h1>
+    <div class="memo" id="over-body"></div>
+    <button id="btn-retry" class="btn">FILE INCIDENT REPORT (RETRY SECTOR)</button>
+    <button id="btn-quit" class="btn subtle">RESIGN COMMISSION</button>
+  </div>
+
+  <!-- Victory -->
+  <div id="screen-victory" class="screen hidden">
+    <h1 class="ok">ALL TABLES INSPECTED</h1>
+    <div class="memo" id="victory-body"></div>
+    <button id="btn-again" class="btn">RE-CERTIFY (PLAY AGAIN)</button>
+  </div>
+</div>
+
+<script src="js/engine.js"></script>
+<script src="js/physics.js"></script>
+<script src="js/cosmic.js"></script>
+<script src="js/memory.js"></script>
+<script src="js/levels.js"></script>
+<script src="js/game.js"></script>
+</body>
+</html>

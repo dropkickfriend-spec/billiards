@@ -1,0 +1,859 @@
+// Cosmic Billiards — game states, input, rendering, and the deadpan referee.
+(function () {
+  const PH = CB.physics, K = CB.cosmic, M = CB.memory, U = CB.util, cam = CB.camera;
+  const T = PH.TABLE;
+
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+
+  // Offscreen buffers for the recursion effect: the scene is rendered to
+  // `world`, then re-drawn into itself (from `snap`) at shrinking scales.
+  const world = document.createElement('canvas');
+  world.width = 1280; world.height = 720;
+  const wctx = world.getContext('2d');
+  const snap = document.createElement('canvas');
+  snap.width = 1280; snap.height = 720;
+  const sctx = snap.getContext('2d');
+
+  const $ = id => document.getElementById(id);
+  const show = id => $(id).classList.remove('hidden');
+  const hide = id => $(id).classList.add('hidden');
+
+  // ---- Game state ----------------------------------------------------------
+  const G = CB.game = {
+    state: 'title',        // title | briefing | aim | shot | placing | cine_universe | cine_mandel | clear | over | victory
+    level: 0,
+    balls: [],
+    score: 0,
+    permits: 0,
+    time: 0,
+    stats: null,
+    aim: null,             // { mx, my } while dragging
+    cine: null,            // cinematic bookkeeping
+    scratched: false,
+    pottedThisShot: 0,
+    nestAnchor: { x: T.x + T.w / 2, y: T.y + T.h / 2 },
+    nestShown: 0,          // smoothed nesting depth for rendering
+    ghosts: null,          // cached ghost-futures cloud for the current aim
+    ghostKey: '',          // aim signature the cloud was computed for
+    track: null            // cue path being recorded during the live shot
+  };
+
+  function newStats() {
+    return { shots: 0, potted: 0, fouls: 0, universes: 0, mandelbrots: 0 };
+  }
+
+  // ---- Referee ticker -------------------------------------------------------
+  function say(msg, cls, holdMs) {
+    const el = document.createElement('div');
+    el.className = 'tick-msg' + (cls ? ' ' + cls : '');
+    el.textContent = msg;
+    const ticker = $('ticker');
+    ticker.appendChild(el);
+    while (ticker.children.length > 3) ticker.removeChild(ticker.firstChild);
+    setTimeout(() => el.classList.add('fading'), holdMs || 3200);
+    setTimeout(() => el.remove(), (holdMs || 3200) + 700);
+  }
+
+  const POT_LINES = [
+    'Particle contained. The universe remains merely probable.',
+    'Pocketed. No new physics detected.',
+    'Containment confirmed. Entropy thanks you.',
+    'Particle filed under “resolved.”',
+    'Clean capture. Reality unchanged, pending audit.'
+  ];
+
+  // ---- Level lifecycle --------------------------------------------------------
+  function loadLevel(i) {
+    G.level = i;
+    const L = CB.LEVELS[i];
+    G.balls = [];
+    L.setup(G.balls);
+    G.permits = L.permits;
+    G.stats = G.stats || newStats();
+    G.pottedThisShot = 0;
+    G.scratched = false;
+    G.nestShown = 0;
+    G.ghosts = null; G.ghostKey = ''; G.track = null;
+    K.reset(L);
+    M.reset(L);
+    CB.particles.clear();
+    cam.reset();
+    updateHud();
+  }
+
+  function showBriefing(i) {
+    G.state = 'briefing';
+    const L = CB.LEVELS[i];
+    $('brief-title').textContent = L.name;
+    $('brief-body').innerHTML = L.briefing.map(p => '<p>' + p + '</p>').join('');
+    $('brief-permit-hint').classList.toggle('hidden', L.permits <= 0);
+    hideAllScreens();
+    show('screen-briefing');
+  }
+
+  function startLevel() {
+    hideAllScreens();
+    show('hud'); show('meter-wrap');
+    loadLevel(G.level);
+    G.state = 'aim';
+  }
+
+  function hideAllScreens() {
+    ['screen-title', 'screen-briefing', 'screen-clear', 'screen-over', 'screen-victory']
+      .forEach(hide);
+  }
+
+  function cueBall() { return G.balls.find(b => b.cue && !b.potted); }
+  function remainingTargets() { return G.balls.filter(b => !b.cue && !b.potted).length; }
+
+  function updateHud() {
+    const L = CB.LEVELS[G.level];
+    $('hud-level').textContent = L.name;
+    $('hud-objective').textContent = 'Objective: ' + L.objective;
+    $('hud-score').textContent = 'SCORE ' + G.score;
+    const perm = $('hud-permits');
+    if (CB.LEVELS[G.level].permits > 0) {
+      perm.classList.remove('hidden');
+      perm.textContent = 'BIG BANG PERMITS: ' + G.permits + (G.state === 'placing' ? '  [CLICK TO DEPLOY]' : '  [U]');
+    } else perm.classList.add('hidden');
+  }
+
+  // ---- Input ------------------------------------------------------------------
+  const mouse = { x: 0, y: 0, down: false };
+
+  function toWorld(ev) {
+    const r = canvas.getBoundingClientRect();
+    return {
+      x: (ev.clientX - r.left) / r.width * 1280,
+      y: (ev.clientY - r.top) / r.height * 720
+    };
+  }
+
+  canvas.addEventListener('mousedown', ev => {
+    const p = toWorld(ev);
+    mouse.down = true; mouse.x = p.x; mouse.y = p.y;
+
+    if (G.state === 'placing') {
+      if (p.x > T.x && p.x < T.x + T.w && p.y > T.y && p.y < T.y + T.h) {
+        G.permits--;
+        K.placeWell(p.x, p.y);
+        G.state = 'aim';
+        updateHud();
+      }
+      return;
+    }
+    if (G.state === 'aim' && cueBall()) G.aim = { mx: p.x, my: p.y };
+    if (G.state === 'cine_universe' || G.state === 'cine_mandel') skipCine();
+  });
+
+  canvas.addEventListener('mousemove', ev => {
+    const p = toWorld(ev);
+    mouse.x = p.x; mouse.y = p.y;
+    if (G.aim) { G.aim.mx = p.x; G.aim.my = p.y; }
+  });
+
+  window.addEventListener('mouseup', () => {
+    mouse.down = false;
+    if (G.aim && G.state === 'aim') fireShot();
+    G.aim = null;
+  });
+
+  window.addEventListener('keydown', ev => {
+    if (ev.key === 'u' || ev.key === 'U') {
+      if (G.state === 'aim' && G.permits > 0) { G.state = 'placing'; updateHud(); }
+      else if (G.state === 'placing') { G.state = 'aim'; updateHud(); }
+    }
+    if (ev.key === 'Escape' && G.state === 'placing') { G.state = 'aim'; updateHud(); }
+  });
+
+  function aimVector() {
+    const c = cueBall();
+    if (!c || !G.aim) return null;
+    const dx = G.aim.mx - c.x, dy = G.aim.my - c.y;
+    const d = Math.hypot(dx, dy);
+    if (d < 4) return null;
+    const power = U.clamp((d - 10) / 260, 0, 1);
+    return { nx: dx / d, ny: dy / d, power };
+  }
+
+  function fireShot() {
+    const v = aimVector();
+    const c = cueBall();
+    if (!v || !c || v.power < 0.04) return;
+    const speed = 140 + v.power * 940;
+    c.vx = v.nx * speed;
+    c.vy = v.ny * speed;
+    G.stats.shots++;
+    G.pottedThisShot = 0;
+    G.track = [{ x: c.x, y: c.y }];   // begin recording this trajectory for memory
+    G.ghosts = null; G.ghostKey = '';
+    K.onShot(Math.atan2(v.ny, v.nx), v.power);
+    G.state = 'shot';
+  }
+
+  // Ghost-ball futures: simulate the shot with tiny variations to reveal the
+  // uncertainty cloud. Recomputed only when the aim signature changes.
+  const GHOST_N = 46;
+  function computeGhosts(cue, v) {
+    const key = (v.nx * 100 | 0) + ':' + (v.ny * 100 | 0) + ':' + (v.power * 100 | 0);
+    if (G.ghostKey === key && G.ghosts) return G.ghosts;
+    G.ghostKey = key;
+    const baseSpeed = 140 + v.power * 940;
+    const spread = 0.015 + v.power * 0.06;   // more power => wider cloud
+    const paths = [];
+    for (let i = 0; i < GHOST_N; i++) {
+      const da = (Math.random() - 0.5) * 2 * spread + (Math.random() - 0.5) * spread * 0.5;
+      const ds = 1 + (Math.random() - 0.5) * (0.05 + v.power * 0.12);
+      const ang = Math.atan2(v.ny, v.nx) + da;
+      const sp = baseSpeed * ds;
+      const r = PH.simulate(G.balls, cue.id, Math.cos(ang) * sp, Math.sin(ang) * sp, 70, 0.04, K.wells);
+      paths.push(r.path);
+    }
+    // The mean / intended trajectory, drawn brighter.
+    const main = PH.simulate(G.balls, cue.id, v.nx * baseSpeed, v.ny * baseSpeed, 90, 0.04, K.wells);
+    G.ghosts = { paths, main: main.path };
+    return G.ghosts;
+  }
+
+  // ---- Physics hooks ---------------------------------------------------------
+  const hooks = {
+    onCollision(a, b, impact, x, y) {
+      K.onCollision(a, b, impact, x, y);
+      CB.particles.spark(x, y, Math.min(10, 2 + impact / 60), impact * 1.2,
+        impact > 300 ? '#ffd9a0' : '#9adcff');
+      if (impact > 380) cam.addShake(2.5);
+    },
+    onCushion(b, sp) {
+      if (sp > 250) CB.particles.spark(b.x, b.y, 3, sp * 0.5, '#5f7684');
+    },
+    onPot(ball) {
+      if (ball.cue) {
+        G.scratched = true;
+        G.score -= 2;
+        G.stats.fouls++;
+        say('FOUL: Observer removed from system. Reality now unverified. −2 points', 'foul');
+      } else {
+        G.pottedThisShot++;
+        G.stats.potted++;
+        G.score += 10;
+        K.onPot();
+        say(ball.inert
+          ? 'Inert particle relocated via cosmology. The Bureau is quietly impressed.'
+          : U.pick(POT_LINES), 'ok');
+      }
+      updateHud();
+    }
+  };
+
+  // ---- Cosmic event consumption ------------------------------------------------
+  function consumeCosmicEvents() {
+    while (K.events.length) {
+      const e = K.events.shift();
+      if (e.type === 'foul') {
+        G.score += e.pts; G.stats.fouls++;
+        say(e.msg, 'foul'); updateHud();
+      } else if (e.type === 'warn') {
+        say(e.msg, 'warn', 4200);
+      } else if (e.type === 'ok') {
+        say(e.msg, 'ok');
+      } else if (e.type === 'universe') {
+        beginUniverseCine(e.x, e.y);
+      } else if (e.type === 'mandelbrot') {
+        beginMandelCine(e.x, e.y);
+      }
+    }
+  }
+
+  function consumeMemoryEvents() {
+    while (M.events.length) {
+      const e = M.events.shift();
+      if (e.type === 'warn') say(e.msg, 'warn', 4200);
+      else if (e.type === 'demon') beginDemonCine(e.x, e.y);
+    }
+  }
+
+  // ---- Cinematics -----------------------------------------------------------
+  function beginUniverseCine(x, y) {
+    G.state = 'cine_universe';
+    G.stats.universes++;
+    G.cine = { t: 0, x, y, said: {} };
+    cam.zoomTo(x, y, 5.2, 3.4);
+    cam.addShake(10);
+    CB.particles.galaxy(x, y, 240);
+    for (const b of G.balls) { b.vx *= 0.05; b.vy *= 0.05; }
+  }
+
+  function beginMandelCine(x, y) {
+    G.state = 'cine_mandel';
+    G.stats.mandelbrots++;
+    G.cine = { t: 0, x, y, said: {}, iterDisplay: K.iter };
+    G.nestAnchor = { x, y };
+    cam.addShake(6);
+  }
+
+  function beginDemonCine(x, y) {
+    G.state = 'cine_demon';
+    G.stats.demons = (G.stats.demons || 0) + 1;
+    G.cine = { t: 0, x, y, said: {} };
+    cam.zoomTo(x, y, 3.0, 3.0);
+    cam.addShake(8);
+    for (const b of G.balls) { b.vx *= 0.1; b.vy *= 0.1; }
+  }
+
+  const DEMON_SCRIPT = [
+    [0.1, 'DEMON DETECTED', 'foul'],
+    [1.0, 'Stored trajectories no longer compress.', 'warn'],
+    [1.9, 'Memory is predicting its own future.', 'warn'],
+    [2.7, 'FOUL: Created sentient life. Emergent structure exceeds safe limits.', 'foul']
+  ];
+
+  const UNI_SCRIPT = [
+    [0.1, 'UNIVERSE DETECTED', 'foul'],
+    [1.0, 'Inflation epoch in progress…', 'warn'],
+    [1.9, 'Matter condensing. Stars igniting.', 'warn'],
+    [2.8, 'FOUL: Created 14 billion years of cosmological evolution.', 'foul']
+  ];
+  const MAN_SCRIPT = [
+    [0.1, 'Iteration 1,024…', 'warn'],
+    [0.9, 'Iteration 65,536…', 'warn'],
+    [1.7, 'Iteration 4,294,967,296…', 'warn'],
+    [2.6, 'MANDELBROT CONTAINMENT FAILURE', 'foul']
+  ];
+
+  function runCine(dt) {
+    const c = G.cine;
+    c.t += dt;
+    const script = G.state === 'cine_universe' ? UNI_SCRIPT
+                 : G.state === 'cine_demon' ? DEMON_SCRIPT : MAN_SCRIPT;
+    for (let i = 0; i < script.length; i++) {
+      if (c.t >= script[i][0] && !c.said[i]) {
+        c.said[i] = true;
+        say(script[i][1], script[i][2], 5000);
+      }
+    }
+    if (G.state === 'cine_mandel') {
+      c.iterDisplay = c.iterDisplay * Math.pow(2.4, dt * 3) + 40 * dt;
+      G.nestShown = Math.min(6.5, G.nestShown + dt * 1.7);
+      $('iter-readout').textContent = 'Iteration ' +
+        Math.floor(c.iterDisplay).toLocaleString() + '…';
+    }
+    if (c.t >= 4.2) endCine();
+  }
+
+  function skipCine() { if (G.cine && G.cine.t > 0.8) G.cine.t = 4.2; }
+
+  function endCine() {
+    const kind = G.state === 'cine_universe' ? 'universe'
+               : G.state === 'cine_demon' ? 'demon' : 'mandel';
+    if (kind === 'mandel' && G.cine) G.cineIterFinal = G.cine.iterDisplay;
+    G.cine = null;
+    gameOver(kind);
+  }
+
+  function gameOver(kind) {
+    G.state = 'over';
+    const civs = U.bignum(U.rand(1.1, 9.8), (7 + Math.random() * 4) | 0);
+    let title, body;
+    if (kind === 'universe') {
+      title = 'UNIVERSE DETECTED';
+      body = '<p>Your shot established a self-sustaining causal loop. The resulting spacetime '
+        + 'region is now expanding, forming galaxies, and requesting administrative support.</p>'
+        + statRows([
+            ['Objective', 'Pot the ball'],
+            ['Outcome', '14 billion years of cosmological evolution'],
+            ['Civilizations created', civs],
+            ['Civilizations that invented billiards', civs],
+            ['Paperwork generated', 'Yes']
+          ]);
+    } else if (kind === 'demon') {
+      title = 'DEMON DETECTED';
+      body = '<p>The accumulated trajectory memory became too self-referential to be a record. '
+        + 'It now models itself, predicts its own future, and declines to be compressed. '
+        + 'Emergent information structure exceeds safe limits.</p>'
+        + statRows([
+            ['Objective', 'Pot the ball'],
+            ['Outcome', 'Created life'],
+            ['Trajectories in memory', String((M.shots && M.shots.length) || 0)],
+            ['Self-awareness', 'Regrettable'],
+            ['Consent obtained', 'No'],
+            ['Paperwork generated', 'It filed its own']
+          ]);
+    } else {
+      title = 'MANDELBROT CONTAINMENT FAILURE';
+      body = '<p>Your shot entered a recursive regime and remained bounded past the containment '
+        + 'limit. The table now contains the table, which contains the table, which contains you.</p>'
+        + statRows([
+            ['Objective', 'Pot the ball'],
+            ['Outcome', 'Geometry became self-hosting'],
+            ['Final iteration', Math.floor(G.cineIterFinal || 4294967296).toLocaleString()],
+            ['Copies of this incident report', 'All of them'],
+            ['Paperwork generated', 'Recursively']
+          ]);
+    }
+    $('over-title').textContent = title;
+    $('over-body').innerHTML = body;
+    hideAllScreens();
+    show('screen-over');
+  }
+
+  function statRows(rows) {
+    return rows.map(r => '<p class="stat"><span>' + r[0] + '</span><b>' + r[1] + '</b></p>').join('');
+  }
+
+  function levelClear() {
+    G.state = 'clear';
+    const usedCosmo = CB.LEVELS[G.level].permits - G.permits;
+    $('clear-body').innerHTML =
+      '<p>No unauthorized cosmology detected.</p>' +
+      statRows([
+        ['Particles contained', String(G.stats.potted)],
+        ['Score', String(G.score)],
+        ['Sanctioned universes deployed', String(usedCosmo)],
+        ['Universes created by accident', String(G.stats.universes)]
+      ]);
+    hideAllScreens();
+    show('screen-clear');
+  }
+
+  function victory() {
+    G.state = 'victory';
+    $('victory-body').innerHTML =
+      '<p>Reality remains approximately intact. You are hereby certified to inspect '
+      + 'recreational spacetime unsupervised.</p>' +
+      statRows([
+        ['Final score', String(G.score)],
+        ['Shots fired', String(G.stats.shots)],
+        ['Particles contained', String(G.stats.potted)],
+        ['Fouls', String(G.stats.fouls)],
+        ['Universes / mathematics / life created', String(G.stats.universes + G.stats.mandelbrots + (G.stats.demons || 0))]
+      ]);
+    hideAllScreens();
+    show('screen-victory');
+  }
+
+  // ---- Buttons ---------------------------------------------------------------
+  $('btn-start').onclick = () => { G.score = 0; G.stats = newStats(); G.level = 0; showBriefing(0); };
+  $('btn-begin').onclick = startLevel;
+  $('btn-next').onclick = () => {
+    G.level++;
+    if (G.level >= CB.LEVELS.length) victory(); else showBriefing(G.level);
+  };
+  $('btn-retry').onclick = () => showBriefing(G.level);
+  $('btn-quit').onclick = () => { hideAllScreens(); hide('hud'); hide('meter-wrap'); show('screen-title'); G.state = 'title'; };
+  $('btn-again').onclick = () => { G.score = 0; G.stats = newStats(); G.level = 0; showBriefing(0); };
+
+  // ---- Update loop -------------------------------------------------------------
+  function update(dt) {
+    G.time += dt;
+    cam.update(dt);
+    CB.particles.update(dt);
+
+    const playing = G.state === 'aim' || G.state === 'shot' || G.state === 'placing';
+
+    if (playing || G.state === 'cine_universe') {
+      PH.step(G.balls, dt, hooks);
+      K.update(dt, G.balls);
+    }
+    if (playing) {
+      consumeCosmicEvents();
+
+      // Record the live cue trajectory into the pending track.
+      if (G.state === 'shot' && G.track) {
+        const c = G.balls.find(b => b.cue);
+        if (c && !c.potted) G.track.push({ x: c.x, y: c.y });
+      }
+
+      // Gravity wells can wake resting balls: fall back into 'shot'.
+      if (G.state === 'aim' && !PH.ballsAtRest(G.balls)) G.state = 'shot';
+
+      if (G.state === 'shot' && PH.ballsAtRest(G.balls) && !K.doomed && !M.doomed) {
+        K.onSettle();
+        // Commit the completed trajectory to permanent memory; may raise a demon.
+        if (G.track && G.track.length > 1) { M.record(G.track); G.track = null; }
+        consumeMemoryEvents();
+        if (M.doomed) return;   // demon cinematic took over
+        if (G.scratched) {
+          G.scratched = false;
+          respawnCue();
+        }
+        if (remainingTargets() === 0) { levelClear(); return; }
+        G.state = 'aim';
+        updateHud();
+      }
+    } else if (G.state === 'cine_universe' || G.state === 'cine_mandel' || G.state === 'cine_demon') {
+      runCine(dt);
+    }
+
+    // Smooth the rendered nesting depth toward the cosmic value.
+    if (G.state !== 'cine_mandel') {
+      G.nestShown += (K.nestDepth - G.nestShown) * Math.min(1, dt * 3);
+      if (K.nestDepth > 0) G.nestAnchor = { x: T.x + T.w / 2, y: T.y + T.h / 2 };
+    }
+
+    updateMeter();
+  }
+
+  function respawnCue() {
+    const c = G.balls.find(b => b.cue);
+    c.potted = false; c.potAnim = 0;
+    c.x = PH.HEAD_SPOT.x; c.y = PH.HEAD_SPOT.y;
+    c.vx = 0; c.vy = 0;
+    // Nudge clear of anything occupying the head spot.
+    let guard = 0;
+    while (guard++ < 40 && G.balls.some(b => b !== c && !b.potted &&
+        U.dist(b.x, b.y, c.x, c.y) < c.r * 2.2)) {
+      c.x -= 10;
+      if (c.x < T.x + c.r) { c.x = PH.HEAD_SPOT.x; c.y -= 12; }
+    }
+    say('Observer reinstated. Please remain inside the system.', 'warn');
+  }
+
+  function updateMeter() {
+    $('meter-fill').style.width = Math.min(100, K.risk() * 100) + '%';
+    $('onto-fill').style.width = Math.min(100, M.risk() * 100) + '%';
+    const it = $('iter-readout');
+    if (G.state === 'cine_mandel') { it.classList.remove('hidden'); return; }
+    if (K.iter > 20) {
+      it.classList.remove('hidden');
+      it.textContent = 'Iteration ' + Math.floor(K.iter) + '…';
+    } else it.classList.add('hidden');
+  }
+
+  // ---- Rendering ------------------------------------------------------------
+  function drawTable(c) {
+    // Outer rail.
+    c.fillStyle = '#131a26';
+    c.strokeStyle = '#2a3a52';
+    c.lineWidth = 2;
+    roundRect(c, T.x - 34, T.y - 34, T.w + 68, T.h + 68, 22);
+    c.fill(); c.stroke();
+
+    // Regulatory placard on the rail.
+    c.fillStyle = 'rgba(140,170,200,0.5)';
+    c.font = '10px "Courier New", monospace';
+    c.textAlign = 'center';
+    c.fillText('TABLE CERTIFIED FOR RECREATIONAL CAUSALITY — BUREAU OF RECREATIONAL COSMOLOGY — MAX 1 UNIVERSE (1)', T.x + T.w / 2, T.y + T.h + 47);
+
+    // Felt: deep space green-blue.
+    const g = c.createRadialGradient(T.x + T.w / 2, T.y + T.h / 2, 80, T.x + T.w / 2, T.y + T.h / 2, 620);
+    g.addColorStop(0, '#0f3d33');
+    g.addColorStop(1, '#092520');
+    c.fillStyle = g;
+    c.fillRect(T.x, T.y, T.w, T.h);
+
+    // Faint field grid — the local mathematics, visible if you squint.
+    c.strokeStyle = 'rgba(120, 220, 200, 0.05)';
+    c.lineWidth = 1;
+    c.beginPath();
+    for (let x = T.x + 50; x < T.x + T.w; x += 50) { c.moveTo(x, T.y); c.lineTo(x, T.y + T.h); }
+    for (let y = T.y + 50; y < T.y + T.h; y += 50) { c.moveTo(T.x, y); c.lineTo(T.x + T.w, y); }
+    c.stroke();
+
+    // Pockets: tiny event horizons.
+    for (const p of PH.pockets) {
+      const pg = c.createRadialGradient(p.x, p.y, 2, p.x, p.y, PH.POCKET_R);
+      pg.addColorStop(0, '#000');
+      pg.addColorStop(0.75, '#02060a');
+      pg.addColorStop(1, 'rgba(90,140,190,0.35)');
+      c.fillStyle = pg;
+      c.beginPath();
+      c.arc(p.x, p.y, PH.POCKET_R, 0, Math.PI * 2);
+      c.fill();
+    }
+  }
+
+  function roundRect(c, x, y, w, h, r) {
+    c.beginPath();
+    c.moveTo(x + r, y);
+    c.arcTo(x + w, y, x + w, y + h, r);
+    c.arcTo(x + w, y + h, x, y + h, r);
+    c.arcTo(x, y + h, x, y, r);
+    c.arcTo(x, y, x + w, y, r);
+    c.closePath();
+  }
+
+  function drawWells(c) {
+    for (const w of K.wells) {
+      const age = w.life / w.maxLife;
+      const pulse = 0.85 + 0.15 * Math.sin(G.time * 6);
+      // Reach ring.
+      c.strokeStyle = 'rgba(150, 120, 255, ' + (0.18 * (1 - age)) + ')';
+      c.lineWidth = 1;
+      c.beginPath(); c.arc(w.x, w.y, w.reach * pulse, 0, Math.PI * 2); c.stroke();
+      // Swirl.
+      for (let arm = 0; arm < 3; arm++) {
+        c.strokeStyle = 'rgba(190, 160, 255, ' + (0.5 * (1 - age)) + ')';
+        c.lineWidth = 2;
+        c.beginPath();
+        for (let k = 0; k <= 20; k++) {
+          const r = 4 + k * 2.2;
+          const a = arm * (Math.PI * 2 / 3) + k * 0.28 - G.time * 2.4;
+          const x = w.x + Math.cos(a) * r, y = w.y + Math.sin(a) * r * 0.8;
+          k === 0 ? c.moveTo(x, y) : c.lineTo(x, y);
+        }
+        c.stroke();
+      }
+      // Core.
+      const cg = c.createRadialGradient(w.x, w.y, 0, w.x, w.y, 16);
+      cg.addColorStop(0, 'rgba(255,255,255,0.95)');
+      cg.addColorStop(1, 'rgba(160,120,255,0)');
+      c.fillStyle = cg;
+      c.beginPath(); c.arc(w.x, w.y, 16, 0, Math.PI * 2); c.fill();
+    }
+  }
+
+  function drawBalls(c) {
+    for (const b of G.balls) {
+      if (b.potted && b.potAnim >= 1) continue;
+      let x = b.x, y = b.y, scale = 1;
+      if (b.potted) {
+        x = U.lerp(b.x, b.potX, b.potAnim);
+        y = U.lerp(b.y, b.potY, b.potAnim);
+        scale = 1 - b.potAnim;
+      }
+      const r = b.r * scale;
+      if (r <= 0.5) continue;
+
+      // Glow.
+      c.globalAlpha = b.inert ? 0.25 : 0.5;
+      const gg = c.createRadialGradient(x, y, r * 0.4, x, y, r * 2.1);
+      gg.addColorStop(0, b.glow);
+      gg.addColorStop(1, 'rgba(0,0,0,0)');
+      c.fillStyle = gg;
+      c.beginPath(); c.arc(x, y, r * 2.1, 0, Math.PI * 2); c.fill();
+      c.globalAlpha = 1;
+
+      // Body.
+      const bg = c.createRadialGradient(x - r * 0.35, y - r * 0.4, r * 0.2, x, y, r);
+      bg.addColorStop(0, lighten(b.color));
+      bg.addColorStop(1, b.color);
+      c.fillStyle = bg;
+      c.beginPath(); c.arc(x, y, r, 0, Math.PI * 2); c.fill();
+      c.strokeStyle = 'rgba(255,255,255,0.25)';
+      c.lineWidth = 1;
+      c.stroke();
+
+      if (b.inert) {
+        c.strokeStyle = 'rgba(200,220,240,0.5)';
+        c.setLineDash([3, 4]);
+        c.beginPath(); c.arc(x, y, r + 4, 0, Math.PI * 2); c.stroke();
+        c.setLineDash([]);
+      }
+      if (b.label && scale > 0.5) {
+        c.fillStyle = b.label === '8' ? '#dfe8f0' : 'rgba(6,16,24,0.85)';
+        c.font = 'bold ' + Math.round(12 * scale) + 'px "Courier New", monospace';
+        c.textAlign = 'center'; c.textBaseline = 'middle';
+        c.fillText(b.label, x, y + 1);
+      }
+    }
+  }
+
+  const lightenCache = {};
+  function lighten(col) {
+    if (lightenCache[col]) return lightenCache[col];
+    const n = parseInt(col.slice(1), 16);
+    const r = Math.min(255, (n >> 16) + 70), g = Math.min(255, ((n >> 8) & 255) + 70), b2 = Math.min(255, (n & 255) + 70);
+    return (lightenCache[col] = 'rgb(' + r + ',' + g + ',' + b2 + ')');
+  }
+
+  // Ghost-ball futures: the cloud of possible trajectories for the current aim.
+  function drawGhosts(c) {
+    if (G.state !== 'aim' || !G.aim) return;
+    const cue = cueBall();
+    if (!cue) return;
+    const v = aimVector();
+    if (!v || v.power < 0.03) return;
+    const g = computeGhosts(cue, v);
+
+    c.lineWidth = 1;
+    c.lineJoin = 'round';
+    for (const path of g.paths) {
+      c.strokeStyle = 'rgba(150, 210, 255, 0.05)';
+      c.beginPath();
+      for (let i = 0; i < path.length; i++) {
+        const p = path[i];
+        i === 0 ? c.moveTo(p.x, p.y) : c.lineTo(p.x, p.y);
+      }
+      c.stroke();
+      // Faint endpoint mote — where this future comes to rest.
+      const end = path[path.length - 1];
+      c.fillStyle = end.potted ? 'rgba(180,120,255,0.25)' : 'rgba(180, 225, 255, 0.14)';
+      c.fillRect(end.x - 1, end.y - 1, 2, 2);
+    }
+    // Intended trajectory, brighter.
+    c.strokeStyle = 'rgba(200, 235, 255, 0.5)';
+    c.lineWidth = 1.5;
+    c.beginPath();
+    for (let i = 0; i < g.main.length; i++) {
+      const p = g.main[i];
+      i === 0 ? c.moveTo(p.x, p.y) : c.lineTo(p.x, p.y);
+    }
+    c.stroke();
+    c.lineWidth = 1;
+  }
+
+  // The demon: a sigil traced from the hottest region of accumulated memory.
+  function drawSigil(c) {
+    const s = G.cine;
+    if (!s) return;
+    const t = Math.min(1, s.t / 2.2);
+    const R = 70;
+    c.save();
+    c.translate(s.x, s.y);
+    c.rotate(G.time * 0.4);
+    c.strokeStyle = 'rgba(255, 90, 109, ' + (0.5 + 0.3 * Math.sin(G.time * 8)) + ')';
+    c.lineWidth = 2;
+    // Outer ring.
+    c.beginPath(); c.arc(0, 0, R * t, 0, Math.PI * 2 * t); c.stroke();
+    // Inscribed pentagram — drawn progressively.
+    const pts = [];
+    for (let i = 0; i < 5; i++) {
+      const a = -Math.PI / 2 + i * Math.PI * 4 / 5;
+      pts.push([Math.cos(a) * R * t, Math.sin(a) * R * t]);
+    }
+    c.beginPath();
+    for (let i = 0; i <= 5; i++) { const p = pts[i % 5]; i === 0 ? c.moveTo(p[0], p[1]) : c.lineTo(p[0], p[1]); }
+    c.stroke();
+    // A watching eye at the center.
+    c.fillStyle = 'rgba(255, 220, 220, ' + t + ')';
+    c.beginPath(); c.ellipse(0, 0, 14 * t, 8 * t, 0, 0, Math.PI * 2); c.fill();
+    c.fillStyle = '#1a0406';
+    c.beginPath(); c.arc(0, 0, 4 * t, 0, Math.PI * 2); c.fill();
+    c.restore();
+  }
+
+  function drawAim(c) {
+    const cue = cueBall();
+    if (!cue) return;
+
+    if (G.state === 'placing') {
+      // Placement reticle.
+      c.strokeStyle = 'rgba(190,160,255,0.7)';
+      c.setLineDash([6, 6]);
+      c.beginPath(); c.arc(mouse.x, mouse.y, 24, 0, Math.PI * 2); c.stroke();
+      c.beginPath(); c.arc(mouse.x, mouse.y, 300, 0, Math.PI * 2);
+      c.strokeStyle = 'rgba(190,160,255,0.15)';
+      c.stroke();
+      c.setLineDash([]);
+      c.fillStyle = 'rgba(220,200,255,0.8)';
+      c.font = '11px "Courier New", monospace';
+      c.textAlign = 'center';
+      c.fillText('SANCTIONED BIG BANG SITE', mouse.x, mouse.y - 32);
+      return;
+    }
+
+    if (G.state !== 'aim' || !G.aim) return;
+    const v = aimVector();
+    if (!v) return;
+
+    // Guide: to first object ball (ghost) or first cushion.
+    const hitBall = PH.rayToBall(cue.x, cue.y, v.nx, v.ny, G.balls, cue);
+    const end = hitBall || PH.rayToCushion(cue.x, cue.y, v.nx, v.ny);
+    c.strokeStyle = 'rgba(255,255,255,0.45)';
+    c.setLineDash([5, 7]);
+    c.lineWidth = 1.5;
+    c.beginPath(); c.moveTo(cue.x, cue.y); c.lineTo(end.x, end.y); c.stroke();
+    c.setLineDash([]);
+    if (hitBall) {
+      c.strokeStyle = 'rgba(255,255,255,0.35)';
+      c.beginPath(); c.arc(end.x, end.y, PH.BALL_R, 0, Math.PI * 2); c.stroke();
+    }
+
+    // Power gauge along the pull-back direction.
+    const px = cue.x - v.nx * (24 + v.power * 60);
+    const py = cue.y - v.ny * (24 + v.power * 60);
+    c.strokeStyle = v.power > 0.75 ? 'rgba(255,120,120,0.9)' : 'rgba(154,220,255,0.9)';
+    c.lineWidth = 4;
+    c.beginPath(); c.moveTo(cue.x - v.nx * 20, cue.y - v.ny * 20); c.lineTo(px, py); c.stroke();
+    c.lineWidth = 1;
+    if (v.power > 0.75) {
+      c.fillStyle = 'rgba(255,150,150,0.85)';
+      c.font = '10px "Courier New", monospace';
+      c.textAlign = 'center';
+      c.fillText('COSMOLOGICALLY INADVISABLE', px - v.nx * 20, py - v.ny * 20 - 8);
+    }
+  }
+
+  function render() {
+    // 1) Scene into the world buffer.
+    wctx.setTransform(1, 0, 0, 1, 0, 0);
+    CB.drawBackdrop(wctx, G.time);
+    drawTable(wctx);
+    M.draw(wctx);              // permanent trajectory residue (the growing memory)
+    drawWells(wctx);
+    drawGhosts(wctx);          // ghost-ball futures uncertainty cloud
+    drawBalls(wctx);
+    drawAim(wctx);
+    CB.particles.draw(wctx);
+    if (G.state === 'cine_demon') drawSigil(wctx);
+
+    // 2) Recursion: table containing the table.
+    if (G.nestShown > 0.03) {
+      sctx.clearRect(0, 0, 1280, 720);
+      sctx.drawImage(world, 0, 0);
+      const depth = Math.ceil(G.nestShown);
+      const a = G.nestAnchor;
+      for (let i = 1; i <= depth; i++) {
+        const frac = Math.min(1, G.nestShown - (i - 1));
+        const s = Math.pow(0.42, i);
+        const wobble = Math.sin(G.time * 1.3 + i) * 0.02;
+        wctx.save();
+        wctx.globalAlpha = 0.85 * frac;
+        wctx.translate(a.x, a.y);
+        wctx.rotate(wobble * i);
+        wctx.scale(s, s);
+        wctx.translate(-640, -360);
+        wctx.drawImage(snap, 0, 0);
+        wctx.restore();
+      }
+      wctx.globalAlpha = 1;
+    }
+
+    // 3) World buffer to screen through the camera.
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.fillStyle = '#04070c';
+    ctx.fillRect(0, 0, 1280, 720);
+    ctx.save();
+    cam.apply(ctx);
+    ctx.drawImage(world, 0, 0);
+    ctx.restore();
+
+    // Cinematic vignettes.
+    if (G.state === 'cine_universe' && G.cine) {
+      const k = Math.min(1, G.cine.t / 3);
+      ctx.fillStyle = 'rgba(2,4,10,' + (k * 0.35) + ')';
+      ctx.fillRect(0, 0, 1280, 720);
+    } else if (G.state === 'cine_demon' && G.cine) {
+      const k = Math.min(1, G.cine.t / 3);
+      const rg = ctx.createRadialGradient(640, 360, 120, 640, 360, 700);
+      rg.addColorStop(0, 'rgba(40,0,6,0)');
+      rg.addColorStop(1, 'rgba(50,0,8,' + (k * 0.55) + ')');
+      ctx.fillStyle = rg;
+      ctx.fillRect(0, 0, 1280, 720);
+    }
+  }
+
+  // ---- Frame scaling to viewport ------------------------------------------------
+  function fitFrame() {
+    const s = Math.min(window.innerWidth / 1280, window.innerHeight / 720);
+    $('frame').style.transform = 'translate(-50%, -50%) scale(' + s + ')';
+  }
+  window.addEventListener('resize', fitFrame);
+  fitFrame();
+
+  // ---- Main loop -------------------------------------------------------------
+  let last = performance.now();
+  function frame(now) {
+    const dt = Math.min(0.033, (now - last) / 1000);
+    last = now;
+    if (G.state !== 'title') update(dt);
+    render();
+    requestAnimationFrame(frame);
+  }
+
+  // Boot: idle attract-mode table behind the title.
+  loadLevel(0);
+  hide('hud'); hide('meter-wrap');
+  requestAnimationFrame(frame);
+})();
