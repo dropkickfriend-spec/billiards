@@ -53,9 +53,9 @@
       objective: 'Pot all particles. Do not create a universe.',
       universeThreshold: 14, complexityMult: 0.8, mandelMult: 0, demonThreshold: Infinity, memoryMult: 1, permits: 0,
       briefing: [
-        'Welcome to the Table Inspection Division.',
-        'The balls on this table are fundamental particles. When you aim, you will see the ghost-ball futures: hundreds of faint trajectories, one for every tiny variation of your shot. This is the cloud of everything the shot could become. Reality records all of it.',
-        'Keep the CAUSAL COMPLEXITY meter out of the GAME OVER band. If interactions form a self-sustaining loop while complexity is critical, a universe will occur, and you will be responsible for it.'
+        'Welcome to the Table Inspection Division, goof. We had other applicants. We chose you. We think about this daily.',
+        'The balls are fundamental particles. When you aim, you’ll see the ghost-ball futures: hundreds of faint trajectories, one for every way this could go wrong. Reality records every single one, including the ones where you clearly weren’t trying.',
+        'Keep the CAUSAL COMPLEXITY meter out of the GAME OVER band. Form a self-sustaining loop while it’s critical and you make a universe. Or — thought exercise — don’t, and go outside instead. Your call. It’s three particles. How hard could it be. (Very.)'
       ],
       setup(out) { cue(out);
         out.push(PH.makeBall(cx - 40, cy, FLAVORS[0]));
@@ -68,8 +68,8 @@
       objective: 'Pot all particles. Do not create a universe.',
       universeThreshold: 12, complexityMult: 1, mandelMult: 0, demonThreshold: Infinity, memoryMult: 1, permits: 0,
       briefing: [
-        'A routine six-particle table. Prior inspector retired abruptly after what the file describes only as “an incident involving geometry.”',
-        'Gentle shots generate less causal complexity, and a tighter uncertainty cloud. Hard breaks are legal, spectacular, and how most universes happen.'
+        'A routine six-particle table. The last inspector retired after “an incident involving geometry.” They also should have gone outside. They did not. Learn from them, goof.',
+        'Gentle shots make less complexity and a tighter cloud. Hard breaks are spectacular, legal, and how most universes get made by people exactly like you.'
       ],
       setup(out) { cue(out); rack(3, cx, cy, out); }
     },
@@ -78,8 +78,8 @@
       objective: 'Pot all particles. Avoid creating additional mathematics.',
       universeThreshold: 12, complexityMult: 1, mandelMult: 1, demonThreshold: Infinity, memoryMult: 1, permits: 0,
       briefing: [
-        'This table sits inside a known recursive attractor. Each shot seeds an iteration sequence; most sequences diverge harmlessly.',
-        'If yours remains bounded, iterations will accumulate and the table will begin to contain smaller copies of itself. At iteration 500 containment fails. Potting a particle vents accumulated mathematics through the pocket aperture.'
+        'This table sits inside a recursive attractor. Each shot seeds an iteration sequence; most diverge harmlessly. Yours won’t, because nothing you do is harmless, goof.',
+        'If it stays bounded, the table starts containing smaller copies of itself, and at iteration 500 containment fails. Potting a particle vents the mathematics. You know what else vents mathematics? Being at a park, having none of these problems.'
       ],
       setup(out) { cue(out); rack(3, cx, cy, out); }
     },
@@ -88,9 +88,9 @@
       objective: 'Pot all particles. Leave behind a simple history.',
       universeThreshold: 12, complexityMult: 1, mandelMult: 0, demonThreshold: 32, memoryMult: 1, permits: 0,
       briefing: [
-        'New this sector: the EMERGENT INFORMATION meter. Every trajectory you have ever shot is stored permanently on the felt — you can see it accumulating as faint residue.',
-        'The Bureau treats that history as information. When it becomes too self-referential — when new shots retrace old ones, when the memory starts predicting itself — it stops being a record and becomes an entity.',
-        'Take simple, varied shots. If the second meter fills: DEMON DETECTED. You will have accidentally created life, and the paperwork for life is enormous.'
+        'New meter, goof: EMERGENT INFORMATION. Every trajectory you’ve ever shot is stored on the felt forever, as faint residue, like a permanent record of your worst decisions. Which it is.',
+        'We treat that history as information. When it gets too self-referential — new shots retracing old ones, the memory predicting itself — it stops being a record and becomes an entity. An entity that has watched you play. Imagine.',
+        'Take simple, varied shots. Fill the second meter and it’s DEMON DETECTED: you’ll have created life, and the paperwork for life is enormous. The paperwork for going outside is zero. Just saying.'
       ],
       setup(out) { cue(out); rack(3, cx, cy, out); }
     },
@@ -99,8 +99,8 @@
       objective: 'Pot all particles during elevated background causality.',
       universeThreshold: 8.5, complexityMult: 1.25, mandelMult: 1.2, demonThreshold: 40, memoryMult: 1, permits: 0,
       briefing: [
-        'Background causality in this sector is elevated. All three thresholds have been lowered accordingly, which the Bureau agrees is unfair.',
-        'Complexity dissipates over time; the memory does not. Waiting between shots cools the first meter but never the second. The simplest possible history is the winning history.'
+        'Background causality is elevated here, so all three thresholds are lower. Is it unfair? Yes. Are we lowering them anyway? Also yes. Consider it motivation to go outside, goof.',
+        'Complexity dissipates over time; the memory never does. Waiting cools the first meter, never the second. The simplest history wins — a bar so low that even you, allegedly, could clear it.'
       ],
       setup(out) { cue(out); rack(3, cx, cy, out);
         out.push(PH.makeBall(T.x + 180, T.y + 110, FLAVORS[7]));
@@ -111,9 +111,9 @@
       objective: 'Pot all particles. The inert particle requires gravitational assistance.',
       universeThreshold: 11, complexityMult: 1, mandelMult: 1, demonThreshold: 44, memoryMult: 1, permits: 2,
       briefing: [
-        'The dark particle on this table has DECLINED TO PARTICIPATE IN CAUSALITY. Cue impacts will barely move it. This is legal under the Particle Autonomy Act.',
-        'You have been issued 2 (two) BIG BANG PERMITS. Press U, then click the table, to deploy a temporary micro-universe. Its gravitational field will move what billiards cannot — the ghost futures will curve to show it.',
-        'Micro-universes expire at heat death (~7 seconds) and generate administrative complexity while active. Yes, you are being asked to solve pool with cosmology. No, there is no other way.'
+        'The dark particle has DECLINED TO PARTICIPATE IN CAUSALITY. Cue impacts barely move it. Frankly, relatable — it also saw you coming and wants no part of this.',
+        'You’ve been issued 2 (two) BIG BANG PERMITS. Press U, click the table, deploy a micro-universe; its gravity moves what billiards can’t, and the ghost futures will curve to show it. Yes, you get to make a universe on purpose now. Try to act normal about it, goof.',
+        'Micro-universes hit heat death in ~7 seconds and cost complexity while running. You are being asked to solve pool with cosmology. There is no other way. There is, however, a door, and outside it, a normal afternoon.'
       ],
       setup(out) { cue(out);
         out.push(PH.makeBall(cx - 30, cy - 90, FLAVORS[1]));
@@ -126,8 +126,8 @@
       objective: 'Pot all particles. Two inert. Recursion and memory both active.',
       universeThreshold: 10, complexityMult: 1.1, mandelMult: 1.3, demonThreshold: 34, memoryMult: 1.15, permits: 3,
       briefing: [
-        'Two inert particles, an active recursive attractor, a brisk complexity ceiling, and a memory that fills faster than standard.',
-        'Deploying a universe to fix a problem caused by a universe is a proud Bureau tradition. Note that repeated Big Bang placements in the same region look, to the memory, a great deal like intent.'
+        'Two inert particles, an active recursive attractor, a brisk complexity ceiling, and a memory that fills faster than standard. We set it up special. For you, goof.',
+        'Deploying a universe to fix a problem caused by a universe is a proud tradition. Note that dropping Big Bangs in the same spot over and over looks, to the memory, a lot like intent — and to us, a lot like someone who should be at a park.'
       ],
       setup(out) { cue(out); rack(2, cx, cy, out);
         out.push(eight(T.x + T.w - 80, T.y + T.h - 80, true));
@@ -139,8 +139,8 @@
       objective: 'Final certification. All three disasters at once.',
       universeThreshold: 9, complexityMult: 1.2, mandelMult: 1.4, demonThreshold: 30, memoryMult: 1.2, permits: 3,
       briefing: [
-        'Ten particles. One inert. Low cosmogenesis ceiling, active recursion, an itchy memory, three permits.',
-        'Clear this table and you will be certified to inspect recreational spacetime unsupervised. The Bureau thanks you in advance and has pre-filled three incident reports — universe, mathematics, and life — just in case.'
+        'Ten particles. One inert. Low cosmogenesis ceiling, active recursion, an itchy memory, three permits. Every disaster at once, because we believe in you the exact right amount, which is a little.',
+        'Clear this and you’re certified to inspect spacetime unsupervised, a sentence that keeps us up at night. We’ve pre-filled three incident reports — universe, mathematics, life — and one leaflet titled “Have You Considered Going Outside?” Read whichever applies, goof.'
       ],
       setup(out) { cue(out); rack(4, cx, cy, out);
         out.push(eight(T.x + T.w - 80, T.y + 70, true));

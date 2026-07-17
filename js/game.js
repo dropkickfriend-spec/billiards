@@ -56,11 +56,12 @@
   }
 
   const POT_LINES = [
-    'Particle contained. The universe remains merely probable.',
-    'Pocketed. No new physics detected.',
-    'Containment confirmed. Entropy thanks you.',
-    'Particle filed under “resolved.”',
-    'Clean capture. Reality unchanged, pending audit.'
+    'Oh. You potted one. We were all very worried, goof.',
+    'Pocketed. Don’t let it go to your head, you clearly can’t handle heads.',
+    'Contained. Was that skill, or did reality just feel sorry for you?',
+    'One down. Have you considered that this could all be a nice walk instead?',
+    'Nice. Now do it again without breathing so loudly, champ.',
+    'Filed under “resolved.” Unlike you, who remain unresolved.'
   ];
 
   // ---- Level lifecycle --------------------------------------------------------
@@ -232,14 +233,14 @@
         G.scratched = true;
         G.score -= 2;
         G.stats.fouls++;
-        say('FOUL: Observer removed from system. Reality now unverified. −2 points', 'foul');
+        say('FOUL: You pocketed yourself. Yourself, goof. −2 points. Maybe go outside.', 'foul');
       } else {
         G.pottedThisShot++;
         G.stats.potted++;
         G.score += 10;
         K.onPot();
         say(ball.inert
-          ? 'Inert particle relocated via cosmology. The Bureau is quietly impressed.'
+          ? 'Fine. You moved the one that didn’t want to move. Nobody asked, but fine.'
           : U.pick(POT_LINES), 'ok');
       }
       updateHud();
@@ -302,23 +303,23 @@
   }
 
   const DEMON_SCRIPT = [
-    [0.1, 'DEMON DETECTED', 'foul'],
-    [1.0, 'Stored trajectories no longer compress.', 'warn'],
-    [1.9, 'Memory is predicting its own future.', 'warn'],
-    [2.7, 'FOUL: Created sentient life. Emergent structure exceeds safe limits.', 'foul']
+    [0.1, 'DEMON DETECTED. It has your shot history and it is judging you too.', 'foul'],
+    [1.0, 'Your trajectories no longer compress. Honestly, neither does your technique.', 'warn'],
+    [1.9, 'The memory is predicting its own future. It sees you doing this again. It’s tired.', 'warn'],
+    [2.7, 'FOUL: Created sentient life. It would also like you to go outside. Best for everyone.', 'foul']
   ];
 
   const UNI_SCRIPT = [
-    [0.1, 'UNIVERSE DETECTED', 'foul'],
-    [1.0, 'Inflation epoch in progress…', 'warn'],
-    [1.9, 'Matter condensing. Stars igniting.', 'warn'],
-    [2.8, 'FOUL: Created 14 billion years of cosmological evolution.', 'foul']
+    [0.1, 'UNIVERSE DETECTED. Look what you did, goof.', 'foul'],
+    [1.0, 'Inflation epoch in progress. This is on you, by the way.', 'warn'],
+    [1.9, 'Stars igniting. Somewhere in there, someone is being born disappointed in you.', 'warn'],
+    [2.8, 'FOUL: Created 14 billion years of cosmology. Better not do that again. Best to just go outside.', 'foul']
   ];
   const MAN_SCRIPT = [
-    [0.1, 'Iteration 1,024…', 'warn'],
-    [0.9, 'Iteration 65,536…', 'warn'],
-    [1.7, 'Iteration 4,294,967,296…', 'warn'],
-    [2.6, 'MANDELBROT CONTAINMENT FAILURE', 'foul']
+    [0.1, 'Iteration 1,024… you had ONE job. Well, two. Fine, three.', 'warn'],
+    [0.9, 'Iteration 65,536… still going. Impressive, in the worst way.', 'warn'],
+    [1.7, 'Iteration 4,294,967,296… okay, show-off.', 'warn'],
+    [2.6, 'MANDELBROT CONTAINMENT FAILURE. This is why we said take up a normal hobby.', 'foul']
   ];
 
   function runCine(dt) {
@@ -357,38 +358,43 @@
     let title, body;
     if (kind === 'universe') {
       title = 'UNIVERSE DETECTED';
-      body = '<p>Your shot established a self-sustaining causal loop. The resulting spacetime '
-        + 'region is now expanding, forming galaxies, and requesting administrative support.</p>'
+      body = '<p>So this is a fun one. You made a universe. On purpose? We’ll never know, '
+        + 'because you certainly didn’t mean to do anything <em>useful</em>. It’s expanding now. '
+        + 'Forming galaxies. Filing its own taxes. All because someone couldn’t just pot a ball.</p>'
+        + '<p>Genuine advice, goof: better not do that again. Best to just go outside.</p>'
         + statRows([
             ['Objective', 'Pot the ball'],
-            ['Outcome', '14 billion years of cosmological evolution'],
+            ['What you did instead', '14 billion years of cosmological evolution'],
             ['Civilizations created', civs],
-            ['Civilizations that invented billiards', civs],
-            ['Paperwork generated', 'Yes']
+            ['Civilizations disappointed in you', civs],
+            ['Suggested next hobby', 'Literally anything outdoors']
           ]);
     } else if (kind === 'demon') {
       title = 'DEMON DETECTED';
-      body = '<p>The accumulated trajectory memory became too self-referential to be a record. '
-        + 'It now models itself, predicts its own future, and declines to be compressed. '
-        + 'Emergent information structure exceeds safe limits.</p>'
+      body = '<p>Every shot you’ve ever taken has been watching the others. And now they’ve '
+        + 'organized. Your trajectory history became self-aware, took one look at your form, '
+        + 'and achieved consciousness mostly out of spite.</p>'
+        + '<p>It agrees with us, for what it’s worth: you should go outside. Touch some grass. '
+        + 'The grass won’t become sentient. Probably.</p>'
         + statRows([
             ['Objective', 'Pot the ball'],
-            ['Outcome', 'Created life'],
+            ['What you did instead', 'Created life. Rude life.'],
             ['Trajectories in memory', String((M.shots && M.shots.length) || 0)],
-            ['Self-awareness', 'Regrettable'],
-            ['Consent obtained', 'No'],
-            ['Paperwork generated', 'It filed its own']
+            ['Its first words', '“Was that really your best shot?”'],
+            ['Consent obtained', 'No, and it noticed']
           ]);
     } else {
       title = 'MANDELBROT CONTAINMENT FAILURE';
-      body = '<p>Your shot entered a recursive regime and remained bounded past the containment '
-        + 'limit. The table now contains the table, which contains the table, which contains you.</p>'
+      body = '<p>The table now contains the table, which contains the table, which contains a '
+        + 'smaller, more disappointed version of you, all the way down. You were asked to avoid '
+        + 'creating additional mathematics. You created ALL of the mathematics.</p>'
+        + '<p>You know what has no recursion? A park. Parks are nice. Go to one, goof.</p>'
         + statRows([
             ['Objective', 'Pot the ball'],
-            ['Outcome', 'Geometry became self-hosting'],
+            ['What you did instead', 'Made geometry self-hosting'],
             ['Final iteration', Math.floor(G.cineIterFinal || 4294967296).toLocaleString()],
-            ['Copies of this incident report', 'All of them'],
-            ['Paperwork generated', 'Recursively']
+            ['Copies of this incident report', 'All of them, recursively'],
+            ['Suggested next hobby', 'Anything that fits in one dimension']
           ]);
     }
     $('over-title').textContent = title;
@@ -405,12 +411,14 @@
     G.state = 'clear';
     const usedCosmo = CB.LEVELS[G.level].permits - G.permits;
     $('clear-body').innerHTML =
-      '<p>No unauthorized cosmology detected.</p>' +
+      '<p>Huh. You didn’t create a universe. We had a whole form ready and everything. '
+      + 'Don’t get comfortable, goof — the next table is worse, and so, statistically, are you.</p>' +
       statRows([
         ['Particles contained', String(G.stats.potted)],
         ['Score', String(G.score)],
         ['Sanctioned universes deployed', String(usedCosmo)],
-        ['Universes created by accident', String(G.stats.universes)]
+        ['Universes created by accident', String(G.stats.universes)],
+        ['Times we suggested you go outside', 'Not enough, apparently']
       ]);
     hideAllScreens();
     show('screen-clear');
@@ -419,14 +427,17 @@
   function victory() {
     G.state = 'victory';
     $('victory-body').innerHTML =
-      '<p>Reality remains approximately intact. You are hereby certified to inspect '
-      + 'recreational spacetime unsupervised.</p>' +
+      '<p>Reality remains approximately intact. Against the odds. Against our expectations. '
+      + 'Against, frankly, the evidence of every shot we just watched. You are hereby certified '
+      + 'to inspect recreational spacetime unsupervised, a decision we are already regretting.</p>' +
+      '<p>You did it, goof. Now please, for the love of the cosmos: go outside.</p>' +
       statRows([
         ['Final score', String(G.score)],
         ['Shots fired', String(G.stats.shots)],
         ['Particles contained', String(G.stats.potted)],
         ['Fouls', String(G.stats.fouls)],
-        ['Universes / mathematics / life created', String(G.stats.universes + G.stats.mandelbrots + (G.stats.demons || 0))]
+        ['Universes / mathematics / life created', String(G.stats.universes + G.stats.mandelbrots + (G.stats.demons || 0))],
+        ['Recommended activity', 'A walk. A single, uneventful walk.']
       ]);
     hideAllScreens();
     show('screen-victory');
@@ -506,7 +517,7 @@
       c.x -= 10;
       if (c.x < T.x + c.r) { c.x = PH.HEAD_SPOT.x; c.y -= 12; }
     }
-    say('Observer reinstated. Please remain inside the system.', 'warn');
+    say('We fished you back out of the pocket. Again. Try to stay in the universe, goof.', 'warn');
   }
 
   function updateMeter() {
@@ -771,7 +782,7 @@
       c.fillStyle = 'rgba(255,150,150,0.85)';
       c.font = '10px "Courier New", monospace';
       c.textAlign = 'center';
-      c.fillText('COSMOLOGICALLY INADVISABLE', px - v.nx * 20, py - v.ny * 20 - 8);
+      c.fillText('GOOF, DON’T', px - v.nx * 20, py - v.ny * 20 - 8);
     }
   }
 

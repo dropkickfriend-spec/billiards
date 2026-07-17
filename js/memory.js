@@ -82,8 +82,8 @@
     M.ontology += gain;
 
     if (selfRefPressure > 0) {
-      emit('warn', { msg: 'Advisory: shot ' + M.shots.length + ' retraces prior history ('
-        + Math.round(bestJ * 100) + '% self-similar). Memory is becoming self-referential.' });
+      emit('warn', { msg: 'Shot ' + M.shots.length + ' is ' + Math.round(bestJ * 100)
+        + '% the same as one you already took. You’re repeating yourself, goof. The table noticed. It’s writing this down.' });
     }
 
     if (M.ontology >= M.threshold && !M.doomed) {
@@ -93,7 +93,7 @@
       emit('demon', { x: spot.x, y: spot.y });
     } else if (M.threshold < Infinity && M.ontology > M.threshold * 0.7 && !M._nagged) {
       M._nagged = true;
-      emit('warn', { msg: 'Warning: accumulated trajectory memory is approaching entity thresholds. Consider simpler shots.' });
+      emit('warn', { msg: 'Your shot history is getting suspiciously self-aware. This is usually the part where we suggest you go outside. So: go outside, goof.' });
     }
   };
 
