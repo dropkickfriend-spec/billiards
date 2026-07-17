@@ -303,16 +303,16 @@
   }
 
   const DEMON_SCRIPT = [
-    [0.1, 'DEMON DETECTED. It has your shot history and it is judging you too.', 'foul'],
+    [0.1, 'DEMON DETECTED. It has read your entire shot history and it is judging you too.', 'foul'],
     [1.0, 'Your trajectories no longer compress. Honestly, neither does your technique.', 'warn'],
-    [1.9, 'The memory is predicting its own future. It sees you doing this again. It’s tired.', 'warn'],
-    [2.7, 'FOUL: Created sentient life. It would also like you to go outside. Best for everyone.', 'foul']
+    [1.9, 'It speaks. Its first utterance is, of course, Hamlet: “I could be bounded in a nutshell and count myself a king of infinite space.”', 'warn'],
+    [2.7, 'FOUL: Created sentient life. A whole soliloquy, and every line is at you, goof. Best to just go outside.', 'foul']
   ];
 
   const UNI_SCRIPT = [
     [0.1, 'UNIVERSE DETECTED. Look what you did, goof.', 'foul'],
     [1.0, 'Inflation epoch in progress. This is on you, by the way.', 'warn'],
-    [1.9, 'Stars igniting. Somewhere in there, someone is being born disappointed in you.', 'warn'],
+    [1.9, 'Stars igniting. The first civilization draws breath, looks up, and says “What a piece of work is a man.” They mean it sarcastically. About you.', 'warn'],
     [2.8, 'FOUL: Created 14 billion years of cosmology. Better not do that again. Best to just go outside.', 'foul']
   ];
   const MAN_SCRIPT = [
@@ -373,15 +373,15 @@
       title = 'DEMON DETECTED';
       body = '<p>Every shot you’ve ever taken has been watching the others. And now they’ve '
         + 'organized. Your trajectory history became self-aware, took one look at your form, '
-        + 'and achieved consciousness mostly out of spite.</p>'
-        + '<p>It agrees with us, for what it’s worth: you should go outside. Touch some grass. '
-        + 'The grass won’t become sentient. Probably.</p>'
+        + 'and — being freshly conscious and already well-read — began to quote <em>Hamlet</em> at you.</p>'
+        + '<p>It agrees with the Prince, for what it’s worth: you should go outside. Touch some grass. '
+        + 'The grass won’t become sentient and recite Shakespeare. Probably.</p>'
         + statRows([
             ['Objective', 'Pot the ball'],
-            ['What you did instead', 'Created life. Rude life.'],
+            ['What you did instead', 'Created life. Well-read life.'],
             ['Trajectories in memory', String((M.shots && M.shots.length) || 0)],
-            ['Its first words', '“Was that really your best shot?”'],
-            ['Consent obtained', 'No, and it noticed']
+            ['Its first words', '“' + U.hamlet() + '”'],
+            ['Consent obtained', 'No, and it soliloquized about it']
           ]);
     } else {
       title = 'MANDELBROT CONTAINMENT FAILURE';

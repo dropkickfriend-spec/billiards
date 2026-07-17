@@ -65,7 +65,7 @@
     // Mid-band foul: somewhere in that cluster, something woke up.
     if (!K.shotFlags.sentience && K.risk() > 0.62 && K.risk() < 1 && Math.random() < 0.4) {
       K.shotFlags.sentience = true;
-      emit('foul', { msg: 'FOUL: Created sentient life. It’s already embarrassed for you. −2 points', pts: -2 });
+      emit('foul', { msg: 'FOUL: Created sentient life. It draws one breath and says, “' + CB.util.hamlet() + '” −2 points', pts: -2 });
     }
   };
 
