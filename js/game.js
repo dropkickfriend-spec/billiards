@@ -43,7 +43,8 @@
     collapse: null,        // wave-collapse animation state after release
     slowmo: 0,             // seconds of post-collapse slow-motion remaining
     perpetual: false,      // true while a fired shot runs at constant energy
-    shotEnergy: 0          // kinetic energy to hold during perpetual motion
+    shotEnergy: 0,         // kinetic energy to hold during perpetual motion
+    shadow: null           // history-free parallel world; deviation from it = complexity
   };
 
   function newStats() {
@@ -246,8 +247,54 @@
     K.onShot(Math.atan2(v.ny, v.nx), v.power);
     CB.particles.spark(c.x, c.y, 14, speed * 0.5, '#bfe6ff');
     cam.addShake(2 + v.power * 3);
+    spawnShadow();                    // the predetermined, history-free parallel world
     G.state = 'shot';
   }
+
+  // The "predetermined Newtonian" world: a clone of the balls evolved in lockstep
+  // with the real table but WITHOUT the history/scar field. The gap between the
+  // real balls and their shadow is exactly the deviation history forces — and
+  // that is the causal complexity. A clean table has no scars, so the two worlds
+  // stay identical (zero complexity); a scarred table drags them apart.
+  const DEV_CAP = 140;   // px, per ball — one chaotic collision can't max it alone
+  function spawnShadow() {
+    G.shadow = G.balls.map(b => ({
+      x: b.x, y: b.y, vx: b.vx, vy: b.vy, r: b.r, mass: b.mass,
+      potted: b.potted, cue: b.cue, id: b.id, potX: 0, potY: 0
+    }));
+  }
+
+  // Advance the shadow one frame with the SAME dt and forces as the real world,
+  // minus the scar field — then measure and bank the deviation.
+  function stepShadow(dt) {
+    const S = G.shadow;
+    if (!S) return;
+    PH.step(S, dt, NO_HOOKS);
+    for (const w of K.wells) {          // same well gravity K.update applies live
+      for (const b of S) {
+        if (b.potted) continue;
+        const dx = w.x - b.x, dy = w.y - b.y, d2 = dx * dx + dy * dy;
+        if (d2 > w.reach * w.reach) continue;
+        const d = Math.sqrt(d2) || 1, acc = Math.min(1400, w.strength / Math.max(d2, 1600));
+        b.vx += (dx / d) * acc * dt; b.vy += (dy / d) * acc * dt;
+      }
+    }
+    if (G.perpetual && !K.wells.length) renormBalls(S, G.shotEnergy);  // matches live
+
+    let dev = 0;
+    const byId = G.shadowById || (G.shadowById = {});
+    for (const b of S) byId[b.id] = b;
+    for (const b of G.balls) {
+      if (b.potted) continue;
+      const s = byId[b.id];
+      if (!s || s.potted) continue;
+      let d = Math.hypot(b.x - s.x, b.y - s.y);
+      if (d > DEV_CAP) d = DEV_CAP;
+      dev += d;
+    }
+    K.deviationStrain(dt, dev);
+  }
+  const NO_HOOKS = {};
 
   // Ghost-ball futures = a probability wave. We fan out many possible shots,
   // measure where those futures pile up (a density field), then re-simulate with
@@ -607,14 +654,14 @@
       // Perpetual, constant-energy motion while a shot is live.
       if (G.state === 'shot') {
         if (G.perpetual) renormEnergy();       // hold the speed set by the slingshot
-        K.motionStrain(dt);                    // running particles strain causality
+        stepShadow(dt);                        // complexity = deviation from the shadow
         // A pot (or scratch) is what ends constant motion — freeze and resolve.
         if ((G.pottedThisShot > 0 || G.scratched) && !K.doomed && !M.doomed) resolveTurn();
       }
 
       // A gravity well can set resting balls in motion (moving an inert particle).
       if (G.state === 'aim' && !PH.ballsAtRest(G.balls)) {
-        G.state = 'shot'; G.perpetual = false; K.motionTime = 0;
+        G.state = 'shot'; G.perpetual = false; spawnShadow();
       }
     } else if (G.state === 'collapse') {
       G.collapse.t += dt;
@@ -633,21 +680,25 @@
   }
 
   // Keep total kinetic energy fixed at the slingshot-set value: constant motion.
-  function renormEnergy() {
-    if (!(G.shotEnergy > 0)) return;
+  function renormBalls(arr, target) {
+    if (!(target > 0)) return;
     let ke = 0;
-    for (const b of G.balls) if (!b.potted) ke += b.mass * (b.vx * b.vx + b.vy * b.vy);
+    for (const b of arr) if (!b.potted) ke += b.mass * (b.vx * b.vx + b.vy * b.vy);
     ke *= 0.5;
     if (ke < 1e-3) return;
-    let sc = Math.sqrt(G.shotEnergy / ke);
+    let sc = Math.sqrt(target / ke);
     if (sc > 1.5) sc = 1.5; else if (sc < 0.6) sc = 0.6;   // damp sudden jumps
-    for (const b of G.balls) if (!b.potted) { b.vx *= sc; b.vy *= sc; }
+    for (const b of arr) if (!b.potted) { b.vx *= sc; b.vy *= sc; }
   }
+  // Hold constant energy — except while a micro-universe is deployed, so its
+  // gravity can shape real orbits (energy trading in/out) instead of being flattened.
+  function renormEnergy() { if (K.wells.length) return; renormBalls(G.balls, G.shotEnergy); }
 
   // Constant motion ends the instant a ball drops: freeze and set up the next aim.
   function resolveTurn() {
     for (const b of G.balls) { b.vx = 0; b.vy = 0; }
     G.perpetual = false;
+    G.shadow = null;
     K.onSettle();
     if (G.track && G.track.length > 1) { M.record(G.track); G.track = null; }
     consumeMemoryEvents();

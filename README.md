@@ -47,9 +47,19 @@ to the single realized trajectory, and then you watch the sim play it out.
 There is **no friction**. The slingshot sets a kinetic energy and the table
 holds it exactly — particles careen and bounce at constant speed and never slow
 down. A shot only ends when you **pot a ball** (everything freezes and you line
-up the next one) or when the game ends. The longer particles run unpotted, the
-faster causal complexity accrues, so a shot that pots nothing eventually strains
-reality into a universe. The pressure is simple: **pot something, fast.**
+up the next one) or when the game ends. Balls can even settle into **orbits**
+around a micro-universe you deploy.
+
+### Complexity is deviation from prediction
+
+When a shot fires, the Bureau records the **predicted Newtonian trajectory** of
+every ball — where pure physics says they'll go. The accumulated history (the
+spacetime-scar field) then bends the real balls *off* that prediction, and the
+size of that deviation is the causal complexity. Enough sustained deviation and
+you get **UNIVERSE DETECTED**. A clean table predicts perfectly, so it's safe;
+a heavily-scarred one drags reality far from prediction and is dangerous. Orbits
+count as predicted motion, so they never raise complexity. The lesson is the
+same: **keep the history simple.**
 
 Every trajectory you actually shoot is then recorded **permanently** on the
 felt as faint residue. The table slowly accumulates a history of every shot

@@ -1,22 +1,22 @@
 // Cosmic Billiards — the part of the rules that shouldn't exist.
 //
-// Every collision feeds two hidden systems:
-//   1. A causal graph. If interactions close a self-sustaining loop
-//      (A -> B -> C -> A) while complexity is high: UNIVERSE DETECTED.
+//   1. Complexity = deviation. History (the scar field) bends balls off the
+//      deterministic Newtonian path predicted at shot time; accumulated
+//      deviation is complexity. Enough of it: UNIVERSE DETECTED. A clean table
+//      predicts perfectly, so it stays safe.
 //   2. A Mandelbrot iterator z = z^2 + c, with c seeded by the shot.
 //      If the sequence stays bounded, iterations accumulate and the
 //      table begins to recurse. At containment limit: game over.
 (function () {
   const K = CB.cosmic = {};
 
-  const CAUSAL_WINDOW = 4.5;   // seconds an edge stays "causally live"
   const MANDEL_LIMIT = 500;
+  const DEV_K = 0.011;         // complexity gained per (px of deviation · second)
 
   K.reset = function (levelCfg) {
     K.cfg = levelCfg;
     K.complexity = 0;
     K.threshold = levelCfg.universeThreshold;
-    K.edges = [];              // { from, to, t }
     K.time = 0;
 
     K.zr = 0; K.zi = 0;        // Mandelbrot state
@@ -43,34 +43,15 @@
     K.ci = 0.42 * power01 * Math.sin(angle) + 0.13;
     K.zr = 0; K.zi = 0;
     K.shotFlags = {};
-    K.motionTime = 0;
-  };
-
-  // Perpetual motion strains causality: the longer particles run without being
-  // potted, the faster complexity accrues. Guarantees a shot that pots nothing
-  // eventually forms a universe rather than running forever.
-  K.motionStrain = function (dt) {
-    if (K.doomed) return;
-    K.motionTime = (K.motionTime || 0) + dt;
-    K.complexity += (0.5 + K.motionTime * 0.85) * dt * (K.cfg.complexityMult || 1);
   };
 
   // ---- Collisions ----------------------------------------------------------
   K.onCollision = function (a, b, impact, x, y) {
     if (K.doomed) return;
 
-    // Complexity from causal interaction (capped so one impact can't do it alone).
-    // Lower per-hit now that frictionless motion means many more collisions.
-    K.complexity += Math.min(3.5, impact * 0.0035 * (K.cfg.complexityMult || 1));
-
-    // Causal graph edge: faster ball imparted causality on the slower one.
-    const spA = Math.hypot(a.vx, a.vy), spB = Math.hypot(b.vx, b.vy);
-    const from = spA >= spB ? a.id : b.id;
-    const to = spA >= spB ? b.id : a.id;
-    K.edges.push({ from, to, t: K.time });
-    checkLoop(from, to, x, y);
-
-    // Mandelbrot iteration burst per collision.
+    // Collisions no longer create complexity directly — complexity now comes
+    // only from history bending balls off their predicted path (deviationStrain).
+    // Collisions still iterate the Mandelbrot sequence (Rule 2).
     stepMandel(x, y);
 
     // Mid-band foul: somewhere in that cluster, something woke up.
@@ -80,35 +61,16 @@
     }
   };
 
-  function checkLoop(from, to, x, y) {
-    // Live edges only.
-    const live = K.edges.filter(e => K.time - e.t < CAUSAL_WINDOW);
-    // DFS from `to` back to `from`; path length >= 2 means loop of >= 3 hops.
-    const adj = {};
-    for (const e of live) (adj[e.from] = adj[e.from] || []).push(e.to);
-    const stack = [{ id: to, depth: 0 }];
-    const seen = new Set();
-    let loop = false;
-    while (stack.length) {
-      const n = stack.pop();
-      if (n.depth > 0 && n.id === from && n.depth >= 2) { loop = true; break; }
-      if (seen.has(n.id) && n.id !== from) continue;
-      seen.add(n.id);
-      for (const nxt of (adj[n.id] || [])) {
-        if (n.depth < 8) stack.push({ id: nxt, depth: n.depth + 1 });
-      }
-    }
-    if (!loop) return;
-
-    if (K.risk() >= 1) {
+  // Rule 1 — complexity = how far history forces balls off their predicted
+  // Newtonian path. `dev` is summed clamped deviation (px) over the live balls.
+  K.deviationStrain = function (dt, dev) {
+    if (K.doomed) return;
+    K.complexity += DEV_K * dev * dt * (K.cfg.complexityMult || 1);
+    if (K.complexity > K.threshold) {
       K.doomed = true;
-      emit('universe', { x, y });
-    } else if (K.risk() > 0.5 && !K.shotFlags.loopWarned) {
-      K.shotFlags.loopWarned = true;
-      emit('warn', { msg: 'We caught a causal loop before it became a universe. You’re welcome, goof. Better not do that again.' });
-      K.complexity *= 0.82; // the Bureau intervenes, this time
+      emit('universe', { x: 640, y: 360 });
     }
-  }
+  };
 
   function stepMandel(x, y) {
     const mult = K.cfg.mandelMult || 0;
@@ -156,19 +118,10 @@
   K.update = function (dt, balls) {
     K.time += dt;
 
-    // Complexity dissipates (half-life ~2.6 s).
+    // Complexity dissipates (half-life ~2.6 s) — deviation must be sustained to
+    // build toward a universe; brief bends relax back down.
     K.complexity *= Math.exp(-0.27 * dt);
     if (K.complexity < 0.01) K.complexity = 0;
-
-    // Raw overload backstop: sustained runaway complexity forms a universe even
-    // without a detected causal loop (e.g. a shot that pots nothing forever).
-    if (!K.doomed && K.complexity > K.threshold * 1.05) {
-      K.doomed = true;
-      emit('universe', { x: 640, y: 360 });
-    }
-
-    // Prune dead causal edges.
-    if (K.edges.length > 400) K.edges = K.edges.filter(e => K.time - e.t < CAUSAL_WINDOW);
 
     // Recursion slowly relaxes while nothing is colliding.
     K.iter = Math.max(0, K.iter - 2.2 * dt);
@@ -177,11 +130,12 @@
     if (K.iter < 213) K.warned[213] = false;
     K.nestDepth = K.iter > 213 ? 3 : K.iter > 87 ? 2 : K.iter > 42 ? 1 : 0;
 
-    // Micro-universe gravity + administration overhead.
+    // Micro-universe gravity. No core damping, so balls can enter stable orbits
+    // instead of being dragged in — and orbits, being predicted motion, add no
+    // complexity.
     for (let i = K.wells.length - 1; i >= 0; i--) {
       const w = K.wells[i];
       w.life += dt;
-      K.complexity += 0.28 * dt; // universes require administration
       if (w.life >= w.maxLife) {
         K.wells.splice(i, 1);
         emit('ok', { msg: 'Your little universe reached heat death on schedule. Everyone in it died wishing you’d gone outside. Permit closed.' });
@@ -196,8 +150,6 @@
         const acc = Math.min(1400, w.strength / Math.max(d2, 1600));
         b.vx += (dx / d) * acc * dt;
         b.vy += (dy / d) * acc * dt;
-        // Mild damping near the core so balls fall in rather than slingshot forever.
-        if (d < 46) { b.vx *= (1 - 1.9 * dt); b.vy *= (1 - 1.9 * dt); }
       }
     }
   };
