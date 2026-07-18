@@ -113,14 +113,18 @@
     $('hud-level').textContent = L.name;
     $('hud-objective').textContent = 'Objective: ' + L.objective;
     $('hud-score').textContent = 'SCORE ' + G.score;
-    const perm = $('hud-permits');
+    const perm = $('btn-bigbang');
     if (CB.LEVELS[G.level].permits > 0) {
       perm.classList.remove('hidden');
-      perm.textContent = 'BIG BANG PERMITS: ' + G.permits + (G.state === 'placing' ? '  [CLICK TO DEPLOY]' : '  [U]');
+      perm.classList.toggle('armed', G.state === 'placing');
+      perm.disabled = G.permits <= 0 && G.state !== 'placing';
+      perm.textContent = G.state === 'placing'
+        ? 'TAP TABLE TO DEPLOY'
+        : 'BIG BANG ×' + G.permits;
     } else perm.classList.add('hidden');
   }
 
-  // ---- Input ------------------------------------------------------------------
+  // ---- Input (unified mouse / touch / pen via Pointer Events) ----------------
   const mouse = { x: 0, y: 0, down: false };
 
   function toWorld(ev) {
@@ -131,50 +135,69 @@
     };
   }
 
-  canvas.addEventListener('mousedown', ev => {
+  function toggleBigBang() {
+    if (G.state === 'aim' && G.permits > 0) { G.aim = null; G.state = 'placing'; updateHud(); }
+    else if (G.state === 'placing') { G.state = 'aim'; updateHud(); }
+  }
+  CB.game.toggleBigBang = toggleBigBang;
+
+  canvas.addEventListener('pointerdown', ev => {
+    ev.preventDefault();
     const p = toWorld(ev);
     mouse.down = true; mouse.x = p.x; mouse.y = p.y;
 
+    if (G.state === 'cine_universe' || G.state === 'cine_mandel' || G.state === 'cine_demon') {
+      skipCine();
+      return;
+    }
     if (G.state === 'placing') {
       if (p.x > T.x && p.x < T.x + T.w && p.y > T.y && p.y < T.y + T.h) {
         G.permits--;
         K.placeWell(p.x, p.y);
         G.state = 'aim';
         updateHud();
+      } else {
+        G.state = 'aim';   // tap off-table cancels placement
+        updateHud();
       }
       return;
     }
-    if (G.state === 'aim' && cueBall()) G.aim = { mx: p.x, my: p.y };
-    if (G.state === 'cine_universe' || G.state === 'cine_mandel') skipCine();
+    // Slingshot aim: anchor at the press point; drag away to pull back.
+    if (G.state === 'aim' && cueBall()) {
+      try { canvas.setPointerCapture(ev.pointerId); } catch (e) {}
+      G.aim = { ox: p.x, oy: p.y, mx: p.x, my: p.y };
+    }
   });
 
-  canvas.addEventListener('mousemove', ev => {
+  canvas.addEventListener('pointermove', ev => {
     const p = toWorld(ev);
     mouse.x = p.x; mouse.y = p.y;
     if (G.aim) { G.aim.mx = p.x; G.aim.my = p.y; }
   });
 
-  window.addEventListener('mouseup', () => {
+  function endPointer(ev) {
+    if (ev && ev.pointerId != null) { try { canvas.releasePointerCapture(ev.pointerId); } catch (e) {} }
     mouse.down = false;
     if (G.aim && G.state === 'aim') fireShot();
     G.aim = null;
-  });
+  }
+  canvas.addEventListener('pointerup', endPointer);
+  canvas.addEventListener('pointercancel', endPointer);
 
   window.addEventListener('keydown', ev => {
-    if (ev.key === 'u' || ev.key === 'U') {
-      if (G.state === 'aim' && G.permits > 0) { G.state = 'placing'; updateHud(); }
-      else if (G.state === 'placing') { G.state = 'aim'; updateHud(); }
-    }
+    if (ev.key === 'u' || ev.key === 'U') toggleBigBang();
     if (ev.key === 'Escape' && G.state === 'placing') { G.state = 'aim'; updateHud(); }
   });
 
+  // Pull-back slingshot: the shot fires OPPOSITE the drag direction, power from
+  // how far you pulled. Anchored at the cue so the guide reads naturally.
   function aimVector() {
     const c = cueBall();
     if (!c || !G.aim) return null;
-    const dx = G.aim.mx - c.x, dy = G.aim.my - c.y;
+    const dx = G.aim.ox - G.aim.mx, dy = G.aim.oy - G.aim.my;  // pull vector
     const d = Math.hypot(dx, dy);
-    if (d < 4) return null;
-    const power = U.clamp((d - 10) / 260, 0, 1);
+    if (d < 6) return null;
+    const power = U.clamp((d - 10) / 240, 0, 1);
     return { nx: dx / d, ny: dy / d, power };
   }
 
@@ -446,6 +469,8 @@
 
   // ---- Buttons ---------------------------------------------------------------
   $('btn-start').onclick = () => { G.score = 0; G.stats = newStats(); G.level = 0; showBriefing(0); };
+  const bb = $('btn-bigbang');
+  if (bb) bb.addEventListener('click', ev => { ev.preventDefault(); toggleBigBang(); });
   const btnClear = $('btn-clear');
   if (btnClear) btnClear.onclick = () => {
     M.clearPersisted();
@@ -780,18 +805,37 @@
       c.beginPath(); c.arc(end.x, end.y, PH.BALL_R, 0, Math.PI * 2); c.stroke();
     }
 
-    // Power gauge along the pull-back direction.
-    const px = cue.x - v.nx * (24 + v.power * 60);
-    const py = cue.y - v.ny * (24 + v.power * 60);
-    c.strokeStyle = v.power > 0.75 ? 'rgba(255,120,120,0.9)' : 'rgba(154,220,255,0.9)';
-    c.lineWidth = 4;
-    c.beginPath(); c.moveTo(cue.x - v.nx * 20, cue.y - v.ny * 20); c.lineTo(px, py); c.stroke();
+    // Slingshot cue stick behind the ball; length grows with pulled power.
+    const hot = v.power > 0.75;
+    const stickLen = 26 + v.power * 108;
+    const bx = cue.x - v.nx * (16 + v.power * 8);   // stick near end (just behind ball)
+    const by = cue.y - v.ny * (16 + v.power * 8);
+    const fx = cue.x - v.nx * (16 + stickLen);      // stick far end
+    const fy = cue.y - v.ny * (16 + stickLen);
+    c.lineCap = 'round';
+    c.strokeStyle = hot ? 'rgba(255,110,120,0.95)' : 'rgba(160,224,255,0.95)';
+    c.lineWidth = 5;
+    c.beginPath(); c.moveTo(bx, by); c.lineTo(fx, fy); c.stroke();
+    // Power band across the stick.
+    c.strokeStyle = hot ? 'rgba(255,170,175,0.9)' : 'rgba(210,240,255,0.85)';
+    c.lineWidth = 2;
+    c.beginPath(); c.arc(fx, fy, 5, 0, Math.PI * 2); c.stroke();
+    c.lineCap = 'butt';
+
+    // The physical finger drag (helps touch players read the slingshot).
+    c.strokeStyle = 'rgba(255,255,255,0.14)';
     c.lineWidth = 1;
-    if (v.power > 0.75) {
-      c.fillStyle = 'rgba(255,150,150,0.85)';
+    c.setLineDash([3, 5]);
+    c.beginPath(); c.moveTo(G.aim.ox, G.aim.oy); c.lineTo(G.aim.mx, G.aim.my); c.stroke();
+    c.setLineDash([]);
+    c.fillStyle = 'rgba(255,255,255,0.25)';
+    c.beginPath(); c.arc(G.aim.mx, G.aim.my, 6, 0, Math.PI * 2); c.fill();
+
+    if (hot) {
+      c.fillStyle = 'rgba(255,150,150,0.9)';
       c.font = '10px "Courier New", monospace';
       c.textAlign = 'center';
-      c.fillText('GOOF, DON’T', px - v.nx * 20, py - v.ny * 20 - 8);
+      c.fillText('GOOF, DON’T', fx, fy - 12);
     }
   }
 
