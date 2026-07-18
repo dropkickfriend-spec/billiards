@@ -84,11 +84,29 @@
     G.scratched = false;
     G.nestShown = 0;
     G.ghosts = null; G.ghostKey = ''; G.track = null;
+    G.levelPeakRisk = 0;
+    PH.pockets.forEach(p => { p.want = null; });   // clear sorting filters
     K.reset(L);
     M.reset(L);
     CB.particles.clear();
     cam.reset();
     updateHud();
+  }
+
+  // A pocket's assigned flavor cycles through the flavors currently on the table.
+  function wantLabel(color) {
+    const b = G.balls.find(x => x.color === color);
+    return b && b.label ? b.label : 'that particle';
+  }
+  function cyclePocketWant(pk) {
+    const colors = [];
+    for (const b of G.balls) if (!b.cue && !b.potted && colors.indexOf(b.color) < 0) colors.push(b.color);
+    if (!colors.length) { pk.want = null; return; }
+    const i = pk.want ? colors.indexOf(pk.want) : -1;
+    pk.want = (i + 1 >= colors.length) ? null : colors[i + 1];
+    say(pk.want
+      ? 'Pocket filter set: only ' + wantLabel(pk.want) + ' welcome here now. Everything else, repelled. Bureaucracy, but make it gravity.'
+      : 'Pocket filter cleared. It will accept anyone again. How permissive of you.', pk.want ? 'ok' : 'warn');
   }
 
   function showBriefing(i) {
@@ -172,6 +190,9 @@
     }
     // Slingshot aim: anchor at the press point; drag away to pull back.
     if (G.state === 'aim' && cueBall()) {
+      // Tapping a pocket cycles its color-sorting filter instead of aiming.
+      const pk = PH.pockets.find(pp => U.dist(pp.x, pp.y, p.x, p.y) < PH.POCKET_R * 1.7);
+      if (pk) { cyclePocketWant(pk); updateHud(); return; }
       try { canvas.setPointerCapture(ev.pointerId); } catch (e) {}
       G.aim = { ox: p.x, oy: p.y, mx: p.x, my: p.y };
     }
@@ -260,7 +281,7 @@
   function spawnShadow() {
     G.shadow = G.balls.map(b => ({
       x: b.x, y: b.y, vx: b.vx, vy: b.vy, r: b.r, mass: b.mass,
-      potted: b.potted, cue: b.cue, id: b.id, potX: 0, potY: 0
+      potted: b.potted, cue: b.cue, id: b.id, color: b.color, potX: 0, potY: 0
     }));
   }
 
@@ -394,7 +415,7 @@
     onCushion(b, sp) {
       if (sp > 250) CB.particles.spark(b.x, b.y, 3, sp * 0.5, '#5f7684');
     },
-    onPot(ball) {
+    onPot(ball, pocket) {
       if (ball.cue) {
         G.scratched = true;
         G.score -= 2;
@@ -403,11 +424,24 @@
       } else {
         G.pottedThisShot++;
         G.stats.potted++;
-        G.score += 10;
         K.onPot();
-        say(ball.inert
-          ? 'Fine. You moved the one that didn’t want to move. Nobody asked, but fine.'
-          : U.pick(POT_LINES), 'ok');
+        if (pocket && pocket.want) {
+          if (pocket.want === ball.color) {
+            G.score += 25;
+            say('Correct particle, correct bin. The Bureau is genuinely stunned. +25', 'ok');
+          } else {
+            G.score -= 5;
+            G.stats.fouls++;
+            K.complexity += 3;   // mis-sorting strains causality
+            say('FOUL: ' + wantLabel(ball.color) + ' does not go in the ' + wantLabel(pocket.want)
+              + ' pocket, goof. That is not how sorting works. −5', 'foul');
+          }
+        } else {
+          G.score += 10;
+          say(ball.inert
+            ? 'Fine. You moved the one that didn’t want to move. Nobody asked, but fine.'
+            : U.pick(POT_LINES), 'ok');
+        }
       }
       updateHud();
     }
@@ -573,18 +607,30 @@
     return rows.map(r => '<p class="stat"><span>' + r[0] + '</span><b>' + r[1] + '</b></p>').join('');
   }
 
+  // Grade the sector on how little the player disturbed reality — the pitch's
+  // "leave the simplest possible history." Uses our real peak-risk metric.
+  function tidiness(peak) {
+    if (peak < 0.15) return ['S', 'Reality did not notice you were here. Suspicious. We are watching you now.'];
+    if (peak < 0.35) return ['A', 'Admirably tidy. The Bureau will pretend this was expected.'];
+    if (peak < 0.60) return ['B', 'Some smudging of causality. Wipeable. Probably.'];
+    if (peak < 0.90) return ['C', 'You left fingerprints all over spacetime, goof.'];
+    return ['D', 'Frankly a mess. A cosmos-adjacent mess. We are billing you for the cleanup.'];
+  }
+
   function levelClear() {
     G.state = 'clear';
     const usedCosmo = CB.LEVELS[G.level].permits - G.permits;
+    const grade = tidiness(G.levelPeakRisk);
     $('clear-body').innerHTML =
       '<p>Huh. You didn’t create a universe. We had a whole form ready and everything. '
-      + 'Don’t get comfortable, goof — the next table is worse, and so, statistically, are you.</p>' +
+      + 'Don’t get comfortable, goof — the next table is worse, and so, statistically, are you.</p>'
+      + '<p class="stat"><span>Tidiness rating</span><b class="grade-' + grade[0] + '">' + grade[0] + ' — ' + grade[1] + '</b></p>' +
       statRows([
         ['Particles contained', String(G.stats.potted)],
+        ['Peak causal disturbance', Math.round(G.levelPeakRisk * 100) + '%'],
         ['Score', String(G.score)],
         ['Sanctioned universes deployed', String(usedCosmo)],
-        ['Universes created by accident', String(G.stats.universes)],
-        ['Times we suggested you go outside', 'Not enough, apparently']
+        ['Universes created by accident', String(G.stats.universes)]
       ]);
     hideAllScreens();
     show('screen-clear');
@@ -725,6 +771,8 @@
   }
 
   function updateMeter() {
+    const r = Math.max(K.risk(), M.risk());
+    if (r > G.levelPeakRisk) G.levelPeakRisk = r;   // for the tidiness grade
     $('meter-fill').style.width = Math.min(100, K.risk() * 100) + '%';
     $('onto-fill').style.width = Math.min(100, M.risk() * 100) + '%';
     const it = $('iter-readout');
@@ -775,6 +823,19 @@
       c.beginPath();
       c.arc(p.x, p.y, PH.POCKET_R, 0, Math.PI * 2);
       c.fill();
+
+      // Sorting filter: dashed ring + expanding pulse in the target flavor.
+      if (p.want) {
+        c.strokeStyle = p.want;
+        c.lineWidth = 2;
+        c.setLineDash([4, 5]);
+        c.beginPath(); c.arc(p.x, p.y, PH.POCKET_R + 7, 0, Math.PI * 2); c.stroke();
+        c.setLineDash([]);
+        const pulse = (G.time * 0.6) % 1;
+        c.globalAlpha = 1 - pulse;
+        c.beginPath(); c.arc(p.x, p.y, PH.POCKET_R + 7 + pulse * 26, 0, Math.PI * 2); c.stroke();
+        c.globalAlpha = 1;
+      }
     }
   }
 
@@ -839,15 +900,17 @@
       c.beginPath(); c.arc(x, y, r * 2.1, 0, Math.PI * 2); c.fill();
       c.globalAlpha = 1;
 
-      // Body.
+      // Body, with a neon rim glow.
       const bg = c.createRadialGradient(x - r * 0.35, y - r * 0.4, r * 0.2, x, y, r);
       bg.addColorStop(0, lighten(b.color));
       bg.addColorStop(1, b.color);
       c.fillStyle = bg;
       c.beginPath(); c.arc(x, y, r, 0, Math.PI * 2); c.fill();
-      c.strokeStyle = 'rgba(255,255,255,0.25)';
-      c.lineWidth = 1;
+      if (!b.inert) { c.shadowBlur = 12 * scale; c.shadowColor = b.glow; }
+      c.strokeStyle = b.inert ? 'rgba(255,255,255,0.25)' : lighten(b.color);
+      c.lineWidth = 1.5;
       c.stroke();
+      c.shadowBlur = 0;
 
       if (b.inert) {
         c.strokeStyle = 'rgba(200,220,240,0.5)';

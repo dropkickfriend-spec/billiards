@@ -36,6 +36,40 @@ html, body {
 
 .hidden { display: none !important; }
 
+/* ---------- Retro CRT overlay ---------- */
+#crt {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+#crt::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0) 0px,
+    rgba(0, 0, 0, 0) 2px,
+    rgba(0, 0, 0, 0.16) 3px,
+    rgba(0, 0, 0, 0) 4px
+  );
+  opacity: 0.6;
+}
+#crt::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  box-shadow: inset 0 0 170px rgba(0, 0, 0, 0.8);
+  background: radial-gradient(ellipse at center, rgba(80, 200, 255, 0.03), rgba(0, 0, 0, 0) 60%);
+}
+
+/* Tidiness grades */
+.grade-S { color: #7dffb0; }
+.grade-A { color: #9adcff; }
+.grade-B { color: #d9c34a; }
+.grade-C { color: #ff9f6b; }
+.grade-D { color: #ff5f6d; }
+
 /* ---------- HUD ---------- */
 #hud {
   position: absolute;

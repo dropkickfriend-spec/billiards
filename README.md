@@ -113,6 +113,23 @@ future shots. When the memory effectively becomes an entity:
 You accidentally created life. **The ideal player doesn't just sink balls —
 they leave behind the simplest possible history.**
 
+## Color-sorting pockets
+
+**Tap any pocket** to cycle a colour filter onto it. A filtered pocket *attracts*
+that particle flavour and *repels* the wrong ones — a gravitational sorting bin.
+Sink the right particle in the right bin for a bonus; drop a wrong one in and
+it's a foul that strains causality (and the referee will let you know). The
+sorting field is deterministic and lives inside the physics step, so the shadow
+prediction and the probability wave both account for it — it steers your shots
+but never counts as history-deviation on its own.
+
+## Tidiness rating
+
+Clearing a sector grades you on how little you disturbed reality — the pitch's
+"leave the simplest possible history." It's read straight off the real
+peak-complexity metric (S = reality didn't notice you; D = a cosmos-adjacent
+mess), because the whole point is that the disturbance is *real*.
+
 ## Progression
 
 Eight sectors. Early on it's just *don't create a universe*. Then recursion
