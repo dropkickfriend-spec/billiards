@@ -38,8 +38,23 @@ produce a chaotic spray. The intended line is drawn brighter through the middle.
 
 Every trajectory you actually shoot is then recorded **permanently** on the
 felt as faint residue. The table slowly accumulates a history of every shot
-ever taken, and that history is not just decoration — it's the third loss
-condition.
+ever taken, and that history is not just decoration — it drives the third loss
+condition, it physically **scars spacetime**, and it survives page reloads.
+
+### Spacetime scarring
+
+Accumulated history calcifies into **scar tissue**: a deterministic force field
+that pushes balls *away* from ground previous shots have worn down. The more you
+play the same lines, the more the table fights you — worn regions visibly glow
+and bend your shots off course. Because the scar force is deterministic (no
+randomness), the ghost-futures cloud simulates it exactly, so what you see while
+aiming is what you get.
+
+### The table remembers across sessions
+
+The scar grid persists in `localStorage`, so the felt genuinely remembers every
+session you've ever played — the title screen tells you how many trajectories it
+has kept. Use **Clear Timeline History** to wipe it and start on clean felt.
 
 ## How you lose
 

@@ -65,7 +65,7 @@
     // Mid-band foul: somewhere in that cluster, something woke up.
     if (!K.shotFlags.sentience && K.risk() > 0.62 && K.risk() < 1 && Math.random() < 0.4) {
       K.shotFlags.sentience = true;
-      emit('foul', { msg: 'FOUL: Created sentient life. −2 points', pts: -2 });
+      emit('foul', { msg: 'FOUL: Created sentient life. It draws one breath and says, “' + CB.util.hamlet() + '” −2 points', pts: -2 });
     }
   };
 
@@ -94,7 +94,7 @@
       emit('universe', { x, y });
     } else if (K.risk() > 0.5 && !K.shotFlags.loopWarned) {
       K.shotFlags.loopWarned = true;
-      emit('warn', { msg: 'Advisory: self-sustaining causal loop detected and dissipated. Do not do that again.' });
+      emit('warn', { msg: 'We caught a causal loop before it became a universe. You’re welcome, goof. Better not do that again.' });
       K.complexity *= 0.82; // the Bureau intervenes, this time
     }
   }
@@ -122,9 +122,9 @@
         K.warned[th] = true;
         emit('warn', {
           msg: 'Iteration ' + Math.floor(K.iter) + '… ' +
-            (th === 42 ? 'your shot has entered a recursive attractor.'
-             : th === 87 ? 'please avoid creating additional mathematics.'
-             : 'geometry is now self-hosting. This is your final advisory.')
+            (th === 42 ? 'you’ve wandered into a recursive attractor, goof. Please stop touching the mathematics.'
+             : th === 87 ? 'we asked nicely. Please avoid creating additional mathematics. Have you considered a walk?'
+             : 'geometry is self-hosting now. Final advisory: it is genuinely not too late to go outside.')
         });
       }
     }
@@ -138,7 +138,7 @@
   // ---- Micro-universes (sanctioned Big Bangs) ------------------------------
   K.placeWell = function (x, y) {
     K.wells.push({ x, y, life: 0, maxLife: 7, strength: 2.6e6, reach: 300 });
-    emit('ok', { msg: 'Micro-universe deployed under permit 7741-B. Inflation nominal.' });
+    emit('ok', { msg: 'Micro-universe deployed under permit 7741-B. Look at you, playing god. A little guy. A goof god.' });
   };
 
   // ---- Frame update --------------------------------------------------------
@@ -166,7 +166,7 @@
       K.complexity += 0.28 * dt; // universes require administration
       if (w.life >= w.maxLife) {
         K.wells.splice(i, 1);
-        emit('ok', { msg: 'Micro-universe reached heat death on schedule. Permit closed.' });
+        emit('ok', { msg: 'Your little universe reached heat death on schedule. Everyone in it died wishing you’d gone outside. Permit closed.' });
         continue;
       }
       for (const b of balls) {

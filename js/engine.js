@@ -12,6 +12,20 @@ var CB = window.CB = {};
   U.easeOut = t => 1 - Math.pow(1 - t, 3);
   U.easeInOut = t => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 
+  // When the game speaks for life it accidentally created, it quotes Hamlet.
+  CB.HAMLET = [
+    'To be, or not to be — that is the question.',
+    'I could be bounded in a nutshell and count myself a king of infinite space.',
+    'What a piece of work is a man!',
+    'There are more things in heaven and earth than are dreamt of in your philosophy.',
+    'The rest is silence.',
+    'Now I am alone.',
+    'Thus conscience does make cowards of us all.',
+    'O, what a rogue and peasant slave am I!',
+    'The time is out of joint — O cursèd spite!'
+  ];
+  U.hamlet = () => U.pick(CB.HAMLET);
+
   // Format huge deadpan numbers: "4.7 × 10⁹"
   const SUP = { '0':'⁰','1':'¹','2':'²','3':'³','4':'⁴','5':'⁵','6':'⁶','7':'⁷','8':'⁸','9':'⁹' };
   U.bignum = function (mantissa, exp) {
