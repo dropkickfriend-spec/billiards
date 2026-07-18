@@ -31,6 +31,7 @@ html, body {
   position: absolute;
   inset: 0;
   background: #04070c;
+  touch-action: none;          /* let the canvas own drags — no scroll/zoom hijack */
 }
 
 .hidden { display: none !important; }
@@ -48,9 +49,29 @@ html, body {
 }
 #hud-level { color: var(--accent); font-weight: bold; }
 #hud-objective { color: var(--dim); font-size: 13px; max-width: 560px; }
-#hud-right { text-align: right; }
+#hud-right { text-align: right; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
 #hud-score { font-weight: bold; }
-#hud-permits { color: var(--ok); font-size: 13px; margin-top: 2px; }
+.hud-btn {
+  pointer-events: auto;         /* HUD itself is click-through; this button isn't */
+  font-family: inherit;
+  font-size: 13px;
+  letter-spacing: 1px;
+  color: var(--ok);
+  background: rgba(8, 20, 14, 0.85);
+  border: 1px solid rgba(125, 255, 176, 0.5);
+  border-radius: 6px;
+  padding: 6px 12px;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.hud-btn:hover { filter: brightness(1.2); }
+.hud-btn.armed {
+  color: #06131c;
+  background: var(--ok);
+  border-color: var(--ok);
+  animation: blink 0.8s steps(2) infinite;
+}
+.hud-btn:disabled { opacity: 0.4; cursor: default; }
 
 /* ---------- Complexity meter ---------- */
 #meter-wrap {

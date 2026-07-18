@@ -29,12 +29,18 @@ No build step, no dependencies. Either:
 | `U`, then click the table | Deploy a sanctioned micro-universe (when permits are issued) |
 | `Esc` | Cancel Big Bang placement |
 
-## The core mechanic: ghost-ball futures
+## The core mechanic: the probability wave
 
-When you aim, the game simulates dozens of tiny variations of your shot and
-draws them all — a fan of faint trajectories showing exactly how much
-uncertainty the shot carries. Gentle shots produce a tight cloud. Hard breaks
-produce a chaotic spray. The intended line is drawn brighter through the middle.
+When you aim, the game fans out dozens of tiny variations of your shot into a
+**probability wave** — a big glowing cloud of possible futures. It's computed in
+two passes: the first measures where those futures pile up (a density field);
+the second re-simulates the wave with **gravity toward the densest regions**, so
+it self-focuses into the channels reality prefers. The wave is repelled by the
+spacetime scars of past shots (see below), so it weaves around your history.
+
+Gentle shots produce a tight, bright wave; hard breaks spray into chaos. When
+you **let go, the wave collapses** — the whole superposition of futures contracts
+to the single realized trajectory, and then you watch the sim play it out.
 
 Every trajectory you actually shoot is then recorded **permanently** on the
 felt as faint residue. The table slowly accumulates a history of every shot

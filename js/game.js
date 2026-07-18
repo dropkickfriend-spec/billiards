@@ -14,6 +14,9 @@
   const snap = document.createElement('canvas');
   snap.width = 1280; snap.height = 720;
   const sctx = snap.getContext('2d');
+  // Tiny buffer for the probability-density field, scaled up smoothly into a glow.
+  const dens = document.createElement('canvas');
+  const densCtx = dens.getContext('2d');
 
   const $ = id => document.getElementById(id);
   const show = id => $(id).classList.remove('hidden');
@@ -36,7 +39,9 @@
     nestShown: 0,          // smoothed nesting depth for rendering
     ghosts: null,          // cached ghost-futures cloud for the current aim
     ghostKey: '',          // aim signature the cloud was computed for
-    track: null            // cue path being recorded during the live shot
+    track: null,           // cue path being recorded during the live shot
+    collapse: null,        // wave-collapse animation state after release
+    slowmo: 0              // seconds of post-collapse slow-motion remaining
   };
 
   function newStats() {
@@ -113,14 +118,18 @@
     $('hud-level').textContent = L.name;
     $('hud-objective').textContent = 'Objective: ' + L.objective;
     $('hud-score').textContent = 'SCORE ' + G.score;
-    const perm = $('hud-permits');
+    const perm = $('btn-bigbang');
     if (CB.LEVELS[G.level].permits > 0) {
       perm.classList.remove('hidden');
-      perm.textContent = 'BIG BANG PERMITS: ' + G.permits + (G.state === 'placing' ? '  [CLICK TO DEPLOY]' : '  [U]');
+      perm.classList.toggle('armed', G.state === 'placing');
+      perm.disabled = G.permits <= 0 && G.state !== 'placing';
+      perm.textContent = G.state === 'placing'
+        ? 'TAP TABLE TO DEPLOY'
+        : 'BIG BANG ×' + G.permits;
     } else perm.classList.add('hidden');
   }
 
-  // ---- Input ------------------------------------------------------------------
+  // ---- Input (unified mouse / touch / pen via Pointer Events) ----------------
   const mouse = { x: 0, y: 0, down: false };
 
   function toWorld(ev) {
@@ -131,90 +140,195 @@
     };
   }
 
-  canvas.addEventListener('mousedown', ev => {
+  function toggleBigBang() {
+    if (G.state === 'aim' && G.permits > 0) { G.aim = null; G.state = 'placing'; updateHud(); }
+    else if (G.state === 'placing') { G.state = 'aim'; updateHud(); }
+  }
+  CB.game.toggleBigBang = toggleBigBang;
+
+  canvas.addEventListener('pointerdown', ev => {
+    ev.preventDefault();
     const p = toWorld(ev);
     mouse.down = true; mouse.x = p.x; mouse.y = p.y;
 
+    if (G.state === 'cine_universe' || G.state === 'cine_mandel' || G.state === 'cine_demon') {
+      skipCine();
+      return;
+    }
     if (G.state === 'placing') {
       if (p.x > T.x && p.x < T.x + T.w && p.y > T.y && p.y < T.y + T.h) {
         G.permits--;
         K.placeWell(p.x, p.y);
         G.state = 'aim';
         updateHud();
+      } else {
+        G.state = 'aim';   // tap off-table cancels placement
+        updateHud();
       }
       return;
     }
-    if (G.state === 'aim' && cueBall()) G.aim = { mx: p.x, my: p.y };
-    if (G.state === 'cine_universe' || G.state === 'cine_mandel') skipCine();
+    // Slingshot aim: anchor at the press point; drag away to pull back.
+    if (G.state === 'aim' && cueBall()) {
+      try { canvas.setPointerCapture(ev.pointerId); } catch (e) {}
+      G.aim = { ox: p.x, oy: p.y, mx: p.x, my: p.y };
+    }
   });
 
-  canvas.addEventListener('mousemove', ev => {
+  canvas.addEventListener('pointermove', ev => {
     const p = toWorld(ev);
     mouse.x = p.x; mouse.y = p.y;
     if (G.aim) { G.aim.mx = p.x; G.aim.my = p.y; }
   });
 
-  window.addEventListener('mouseup', () => {
+  function endPointer(ev) {
+    if (ev && ev.pointerId != null) { try { canvas.releasePointerCapture(ev.pointerId); } catch (e) {} }
     mouse.down = false;
     if (G.aim && G.state === 'aim') fireShot();
     G.aim = null;
-  });
+  }
+  canvas.addEventListener('pointerup', endPointer);
+  canvas.addEventListener('pointercancel', endPointer);
 
   window.addEventListener('keydown', ev => {
-    if (ev.key === 'u' || ev.key === 'U') {
-      if (G.state === 'aim' && G.permits > 0) { G.state = 'placing'; updateHud(); }
-      else if (G.state === 'placing') { G.state = 'aim'; updateHud(); }
-    }
+    if (ev.key === 'u' || ev.key === 'U') toggleBigBang();
     if (ev.key === 'Escape' && G.state === 'placing') { G.state = 'aim'; updateHud(); }
   });
 
+  // Pull-back slingshot: the shot fires OPPOSITE the drag direction, power from
+  // how far you pulled. Anchored at the cue so the guide reads naturally.
   function aimVector() {
     const c = cueBall();
     if (!c || !G.aim) return null;
-    const dx = G.aim.mx - c.x, dy = G.aim.my - c.y;
+    const dx = G.aim.ox - G.aim.mx, dy = G.aim.oy - G.aim.my;  // pull vector
     const d = Math.hypot(dx, dy);
-    if (d < 4) return null;
-    const power = U.clamp((d - 10) / 260, 0, 1);
+    if (d < 6) return null;
+    const power = U.clamp((d - 10) / 240, 0, 1);
     return { nx: dx / d, ny: dy / d, power };
   }
 
+  // Letting go collapses the probability wave: the superposition of futures
+  // contracts to the single realized trajectory, then we watch it play out.
   function fireShot() {
     const v = aimVector();
     const c = cueBall();
     if (!v || !c || v.power < 0.04) return;
+    const g = computeGhosts(c, v);
+    G.collapse = {
+      t: 0, dur: 0.5,
+      v: { nx: v.nx, ny: v.ny, power: v.power },
+      paths: g.paths.map(p => p.slice()),
+      main: g.main.slice(),
+      field: g.field, gx: g.gx, gy: g.gy, cell: g.cell,
+      cx: c.x, cy: c.y
+    };
+    G.aim = null;
+    G.state = 'collapse';
+  }
+
+  // Apply the actual shot once the wave has finished collapsing.
+  function realizeShot() {
+    const col = G.collapse, c = cueBall();
+    G.collapse = null;
+    if (!c) { G.state = 'aim'; return; }
+    const v = col.v;
     const speed = 140 + v.power * 940;
     c.vx = v.nx * speed;
     c.vy = v.ny * speed;
     G.stats.shots++;
     G.pottedThisShot = 0;
-    G.track = [{ x: c.x, y: c.y }];   // begin recording this trajectory for memory
+    G.track = [{ x: c.x, y: c.y }];
     G.ghosts = null; G.ghostKey = '';
+    G.slowmo = 0.55;                  // brief slow-mo so we "watch the sim" resolve
     K.onShot(Math.atan2(v.ny, v.nx), v.power);
+    CB.particles.spark(c.x, c.y, 14, speed * 0.5, '#bfe6ff');
+    cam.addShake(2 + v.power * 3);
     G.state = 'shot';
   }
 
-  // Ghost-ball futures: simulate the shot with tiny variations to reveal the
-  // uncertainty cloud. Recomputed only when the aim signature changes.
-  const GHOST_N = 46;
+  // Ghost-ball futures = a probability wave. We fan out many possible shots,
+  // measure where those futures pile up (a density field), then re-simulate with
+  // GRAVITY toward the densest regions so the wave self-focuses into the channels
+  // reality prefers. History scars repel it; probability gravity attracts it.
+  const GHOST_N = 60;               // the visible wave (pass 2)
+  const P1_N = 38;                  // coarse density estimate (pass 1)
+  const GSTEPS = 54;
+  const GDT = 0.045;
+  const DCELL = 30;                 // density-field cell size
+  const DGX = Math.ceil(1280 / DCELL), DGY = Math.ceil(720 / DCELL);
   const scarFn = (x, y) => M.scarForce(x, y);
+
+  function newField() { return { d: new Float32Array(DGX * DGY), max: 0 }; }
+  function stampPath(field, path) {
+    const d = field.d;
+    for (let i = 0; i < path.length; i++) {
+      const p = path[i];
+      let cx = (p.x / DCELL) | 0, cy = (p.y / DCELL) | 0;
+      if (cx < 0) cx = 0; else if (cx >= DGX) cx = DGX - 1;
+      if (cy < 0) cy = 0; else if (cy >= DGY) cy = DGY - 1;
+      d[cy * DGX + cx] += 1;
+    }
+  }
+  function fieldMax(field) {
+    let m = 0; const d = field.d;
+    for (let i = 0; i < d.length; i++) if (d[i] > m) m = d[i];
+    field.max = m; return m;
+  }
+  // Probability gravity: accelerate up the density gradient toward likely futures.
+  function fieldForce(field, strength) {
+    const d = field.d;
+    return function (x, y) {
+      const cx = (x / DCELL) | 0, cy = (y / DCELL) | 0;
+      if (cx < 1 || cy < 1 || cx >= DGX - 1 || cy >= DGY - 1) return ZEROF;
+      const i = cy * DGX + cx;
+      const gx = d[i + 1] - d[i - 1];
+      const gy = d[i + DGX] - d[i - DGX];
+      const mag = Math.hypot(gx, gy);
+      if (mag < 0.001) return ZEROF;
+      const f = strength * Math.min(1, (field.max ? d[i] / field.max : 0) + 0.15);
+      return { fx: (gx / mag) * f, fy: (gy / mag) * f };  // toward higher density
+    };
+  }
+  const ZEROF = { fx: 0, fy: 0 };
+
+  function simFan(cue, v, gravity, n) {
+    const baseSpeed = 140 + v.power * 940;
+    const spread = 0.02 + v.power * 0.085;   // wider wave than before
+    const base = Math.atan2(v.ny, v.nx);
+    const paths = [];
+    const field = newField();
+    for (let i = 0; i < n; i++) {
+      const da = (Math.random() - 0.5) * 2 * spread + (Math.random() - 0.5) * spread * 0.5;
+      const ds = 1 + (Math.random() - 0.5) * (0.06 + v.power * 0.14);
+      const sp = baseSpeed * ds, ang = base + da;
+      const r = PH.simulate(G.balls, cue.id, Math.cos(ang) * sp, Math.sin(ang) * sp,
+        GSTEPS, GDT, K.wells, scarFn, gravity);
+      paths.push(r.path);
+      stampPath(field, r.path);
+    }
+    fieldMax(field);
+    return { paths, field, baseSpeed };
+  }
+
+  let lastGhostTime = -1;
   function computeGhosts(cue, v) {
     const key = (v.nx * 100 | 0) + ':' + (v.ny * 100 | 0) + ':' + (v.power * 100 | 0);
     if (G.ghostKey === key && G.ghosts) return G.ghosts;
+    // Throttle the (heavy) two-pass recompute; reuse the cloud between ticks.
+    if (G.ghosts && G.time - lastGhostTime < 0.045) return G.ghosts;
+    lastGhostTime = G.time;
     G.ghostKey = key;
-    const baseSpeed = 140 + v.power * 940;
-    const spread = 0.015 + v.power * 0.06;   // more power => wider cloud
-    const paths = [];
-    for (let i = 0; i < GHOST_N; i++) {
-      const da = (Math.random() - 0.5) * 2 * spread + (Math.random() - 0.5) * spread * 0.5;
-      const ds = 1 + (Math.random() - 0.5) * (0.05 + v.power * 0.12);
-      const ang = Math.atan2(v.ny, v.nx) + da;
-      const sp = baseSpeed * ds;
-      const r = PH.simulate(G.balls, cue.id, Math.cos(ang) * sp, Math.sin(ang) * sp, 70, 0.04, K.wells, scarFn);
-      paths.push(r.path);
-    }
-    // The mean / intended trajectory, drawn brighter.
-    const main = PH.simulate(G.balls, cue.id, v.nx * baseSpeed, v.ny * baseSpeed, 90, 0.04, K.wells, scarFn);
-    G.ghosts = { paths, main: main.path };
+
+    // Pass 1: coarse unfocused wave -> density field.
+    const p1 = simFan(cue, v, null, P1_N);
+    // Pass 2: full wave, now gravitating toward pass-1 density -> self-focused.
+    const grav = fieldForce(p1.field, 620);
+    const p2 = simFan(cue, v, grav, GHOST_N);
+
+    const main = PH.simulate(G.balls, cue.id, v.nx * p2.baseSpeed, v.ny * p2.baseSpeed,
+      90, GDT, K.wells, scarFn, grav);
+
+    G.ghosts = { paths: p2.paths, field: p2.field, main: main.path,
+                 gx: DGX, gy: DGY, cell: DCELL };
     return G.ghosts;
   }
 
@@ -446,6 +560,8 @@
 
   // ---- Buttons ---------------------------------------------------------------
   $('btn-start').onclick = () => { G.score = 0; G.stats = newStats(); G.level = 0; showBriefing(0); };
+  const bb = $('btn-bigbang');
+  if (bb) bb.addEventListener('click', ev => { ev.preventDefault(); toggleBigBang(); });
   const btnClear = $('btn-clear');
   if (btnClear) btnClear.onclick = () => {
     M.clearPersisted();
@@ -501,6 +617,9 @@
         G.state = 'aim';
         updateHud();
       }
+    } else if (G.state === 'collapse') {
+      G.collapse.t += dt;
+      if (G.collapse.t >= G.collapse.dur) realizeShot();
     } else if (G.state === 'cine_universe' || G.state === 'cine_mandel' || G.state === 'cine_demon') {
       runCine(dt);
     }
@@ -678,6 +797,35 @@
   }
 
   // Ghost-ball futures: the cloud of possible trajectories for the current aim.
+  // The probability wave: the density field rendered as a smooth glowing cloud.
+  function drawProbabilityField(c, g, fade) {
+    const field = g.field, max = field.max || 1;
+    if (max <= 0) return;
+    if (dens.width !== g.gx) { dens.width = g.gx; dens.height = g.gy; }
+    const img = densCtx.createImageData(g.gx, g.gy);
+    const px = img.data, d = field.d;
+    for (let i = 0; i < d.length; i++) {
+      const n = Math.min(1, d[i] / max);
+      const j = i * 4;
+      // Cyan core brightening to white where futures pile up.
+      px[j] = 90 + n * 165;
+      px[j + 1] = 180 + n * 75;
+      px[j + 2] = 255;
+      px[j + 3] = Math.min(235, Math.pow(n, 0.7) * 300) * (fade == null ? 1 : fade);
+    }
+    densCtx.putImageData(img, 0, 0);
+    const T = PH.TABLE;
+    c.save();
+    c.beginPath(); c.rect(T.x, T.y, T.w, T.h); c.clip();
+    c.imageSmoothingEnabled = true;
+    c.globalCompositeOperation = 'lighter';
+    c.globalAlpha = 0.5;
+    c.drawImage(dens, 0, 0, g.gx, g.gy, 0, 0, g.gx * g.cell, g.gy * g.cell);
+    c.globalAlpha = 1;
+    c.globalCompositeOperation = 'source-over';
+    c.restore();
+  }
+
   function drawGhosts(c) {
     if (G.state !== 'aim' || !G.aim) return;
     const cue = cueBall();
@@ -686,19 +834,20 @@
     if (!v || v.power < 0.03) return;
     const g = computeGhosts(cue, v);
 
+    drawProbabilityField(c, g);
+
     c.lineWidth = 1;
     c.lineJoin = 'round';
     for (const path of g.paths) {
-      c.strokeStyle = 'rgba(150, 210, 255, 0.05)';
+      c.strokeStyle = 'rgba(150, 210, 255, 0.045)';
       c.beginPath();
       for (let i = 0; i < path.length; i++) {
         const p = path[i];
         i === 0 ? c.moveTo(p.x, p.y) : c.lineTo(p.x, p.y);
       }
       c.stroke();
-      // Faint endpoint mote — where this future comes to rest.
       const end = path[path.length - 1];
-      c.fillStyle = end.potted ? 'rgba(180,120,255,0.25)' : 'rgba(180, 225, 255, 0.14)';
+      c.fillStyle = end.potted ? 'rgba(180,120,255,0.3)' : 'rgba(180, 225, 255, 0.12)';
       c.fillRect(end.x - 1, end.y - 1, 2, 2);
     }
     // Intended trajectory, brighter.
@@ -711,6 +860,47 @@
     }
     c.stroke();
     c.lineWidth = 1;
+  }
+
+  // Wave collapse: the superposition of futures contracts to the realized one.
+  function drawCollapse(c) {
+    const col = G.collapse;
+    if (!col) return;
+    const t = Math.min(1, col.t / col.dur);
+    const k = U.easeInOut(t);
+
+    // The probability field dims as the wave collapses.
+    drawProbabilityField(c, col, 1 - k);
+
+    // Every possible path slides toward the one realized trajectory.
+    const mainLen = col.main.length;
+    c.lineWidth = 1; c.lineJoin = 'round';
+    for (const path of col.paths) {
+      c.strokeStyle = 'rgba(160, 215, 255, ' + (0.16 * (1 - k)) + ')';
+      c.beginPath();
+      for (let i = 0; i < path.length; i++) {
+        const p = path[i];
+        const mi = Math.min(mainLen - 1, Math.round(i / path.length * mainLen));
+        const m = col.main[mi];
+        const x = U.lerp(p.x, m.x, k), y = U.lerp(p.y, m.y, k);
+        i === 0 ? c.moveTo(x, y) : c.lineTo(x, y);
+      }
+      c.stroke();
+    }
+    // The realized trajectory resolves brighter as the rest vanish.
+    c.strokeStyle = 'rgba(210, 240, 255, ' + (0.35 + 0.55 * k) + ')';
+    c.lineWidth = 2;
+    c.beginPath();
+    for (let i = 0; i < mainLen; i++) {
+      const p = col.main[i];
+      i === 0 ? c.moveTo(p.x, p.y) : c.lineTo(p.x, p.y);
+    }
+    c.stroke();
+    c.lineWidth = 1;
+
+    // Collapse shockwave out from the cue.
+    c.strokeStyle = 'rgba(190, 230, 255, ' + (0.55 * (1 - k)) + ')';
+    c.beginPath(); c.arc(col.cx, col.cy, k * 180, 0, Math.PI * 2); c.stroke();
   }
 
   // The demon: a sigil traced from the hottest region of accumulated memory.
@@ -780,18 +970,37 @@
       c.beginPath(); c.arc(end.x, end.y, PH.BALL_R, 0, Math.PI * 2); c.stroke();
     }
 
-    // Power gauge along the pull-back direction.
-    const px = cue.x - v.nx * (24 + v.power * 60);
-    const py = cue.y - v.ny * (24 + v.power * 60);
-    c.strokeStyle = v.power > 0.75 ? 'rgba(255,120,120,0.9)' : 'rgba(154,220,255,0.9)';
-    c.lineWidth = 4;
-    c.beginPath(); c.moveTo(cue.x - v.nx * 20, cue.y - v.ny * 20); c.lineTo(px, py); c.stroke();
+    // Slingshot cue stick behind the ball; length grows with pulled power.
+    const hot = v.power > 0.75;
+    const stickLen = 26 + v.power * 108;
+    const bx = cue.x - v.nx * (16 + v.power * 8);   // stick near end (just behind ball)
+    const by = cue.y - v.ny * (16 + v.power * 8);
+    const fx = cue.x - v.nx * (16 + stickLen);      // stick far end
+    const fy = cue.y - v.ny * (16 + stickLen);
+    c.lineCap = 'round';
+    c.strokeStyle = hot ? 'rgba(255,110,120,0.95)' : 'rgba(160,224,255,0.95)';
+    c.lineWidth = 5;
+    c.beginPath(); c.moveTo(bx, by); c.lineTo(fx, fy); c.stroke();
+    // Power band across the stick.
+    c.strokeStyle = hot ? 'rgba(255,170,175,0.9)' : 'rgba(210,240,255,0.85)';
+    c.lineWidth = 2;
+    c.beginPath(); c.arc(fx, fy, 5, 0, Math.PI * 2); c.stroke();
+    c.lineCap = 'butt';
+
+    // The physical finger drag (helps touch players read the slingshot).
+    c.strokeStyle = 'rgba(255,255,255,0.14)';
     c.lineWidth = 1;
-    if (v.power > 0.75) {
-      c.fillStyle = 'rgba(255,150,150,0.85)';
+    c.setLineDash([3, 5]);
+    c.beginPath(); c.moveTo(G.aim.ox, G.aim.oy); c.lineTo(G.aim.mx, G.aim.my); c.stroke();
+    c.setLineDash([]);
+    c.fillStyle = 'rgba(255,255,255,0.25)';
+    c.beginPath(); c.arc(G.aim.mx, G.aim.my, 6, 0, Math.PI * 2); c.fill();
+
+    if (hot) {
+      c.fillStyle = 'rgba(255,150,150,0.9)';
       c.font = '10px "Courier New", monospace';
       c.textAlign = 'center';
-      c.fillText('GOOF, DON’T', px - v.nx * 20, py - v.ny * 20 - 8);
+      c.fillText('GOOF, DON’T', fx, fy - 12);
     }
   }
 
@@ -802,7 +1011,8 @@
     drawTable(wctx);
     M.draw(wctx);              // permanent trajectory residue (the growing memory)
     drawWells(wctx);
-    drawGhosts(wctx);          // ghost-ball futures uncertainty cloud
+    drawGhosts(wctx);          // probability wave while aiming
+    if (G.state === 'collapse') drawCollapse(wctx);
     drawBalls(wctx);
     drawAim(wctx);
     CB.particles.draw(wctx);
@@ -865,8 +1075,13 @@
   // ---- Main loop -------------------------------------------------------------
   let last = performance.now();
   function frame(now) {
-    const dt = Math.min(0.033, (now - last) / 1000);
+    let dt = Math.min(0.033, (now - last) / 1000);
     last = now;
+    // Brief slow-mo right after collapse so we "watch the sim" resolve.
+    if (G.slowmo > 0) {
+      G.slowmo = Math.max(0, G.slowmo - dt);
+      dt *= 0.4;
+    }
     if (G.state !== 'title') update(dt);
     render();
     requestAnimationFrame(frame);
