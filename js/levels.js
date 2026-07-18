@@ -51,7 +51,7 @@
     {
       name: 'SECTOR 01 — ORIENTATION',
       objective: 'Pot all particles. Do not create a universe.',
-      universeThreshold: 14, complexityMult: 0.8, mandelMult: 0, demonThreshold: Infinity, memoryMult: 1, permits: 0,
+      universeThreshold: 14, complexityMult: 0.8, mandelMult: 0, demonThreshold: Infinity, memoryMult: 1, scarMult: 0, permits: 0,
       briefing: [
         'Welcome to the Table Inspection Division, goof. We had other applicants. We chose you. We think about this daily.',
         'The balls are fundamental particles. When you aim, you’ll see the ghost-ball futures: hundreds of faint trajectories, one for every way this could go wrong. Reality records every single one, including the ones where you clearly weren’t trying.',
@@ -66,7 +66,7 @@
     {
       name: 'SECTOR 02 — STANDARD INSPECTION',
       objective: 'Pot all particles. Do not create a universe.',
-      universeThreshold: 12, complexityMult: 1, mandelMult: 0, demonThreshold: Infinity, memoryMult: 1, permits: 0,
+      universeThreshold: 12, complexityMult: 1, mandelMult: 0, demonThreshold: Infinity, memoryMult: 1, scarMult: 0, permits: 0,
       briefing: [
         'A routine six-particle table. The last inspector retired after “an incident involving geometry.” They also should have gone outside. They did not. Learn from them, goof.',
         'Gentle shots make less complexity and a tighter cloud. Hard breaks are spectacular, legal, and how most universes get made by people exactly like you.'
@@ -76,7 +76,7 @@
     {
       name: 'SECTOR 03 — RECURSION ADVISORY',
       objective: 'Pot all particles. Avoid creating additional mathematics.',
-      universeThreshold: 12, complexityMult: 1, mandelMult: 1, demonThreshold: Infinity, memoryMult: 1, permits: 0,
+      universeThreshold: 12, complexityMult: 1, mandelMult: 1, demonThreshold: Infinity, memoryMult: 1, scarMult: 0, permits: 0,
       briefing: [
         'This table sits inside a recursive attractor. Each shot seeds an iteration sequence; most diverge harmlessly. Yours won’t, because nothing you do is harmless, goof.',
         'If it stays bounded, the table starts containing smaller copies of itself, and at iteration 500 containment fails. Potting a particle vents the mathematics. You know what else vents mathematics? Being at a park, having none of these problems.'
@@ -86,7 +86,7 @@
     {
       name: 'SECTOR 04 — THE TABLE REMEMBERS',
       objective: 'Pot all particles. Leave behind a simple history.',
-      universeThreshold: 12, complexityMult: 1, mandelMult: 0, demonThreshold: 32, memoryMult: 1, permits: 0,
+      universeThreshold: 12, complexityMult: 1, mandelMult: 0, demonThreshold: 32, memoryMult: 1, scarMult: 0.85, permits: 0,
       briefing: [
         'New meter, goof: EMERGENT INFORMATION. Every trajectory you’ve ever shot is stored on the felt forever, as faint residue, like a permanent record of your worst decisions. Which it is.',
         'We treat that history as information. When it gets too self-referential — new shots retracing old ones, the memory predicting itself — it stops being a record and becomes an entity. An entity that has watched you play. Imagine.',
@@ -97,7 +97,7 @@
     {
       name: 'SECTOR 05 — CAUSAL STORM',
       objective: 'Pot all particles during elevated background causality.',
-      universeThreshold: 8.5, complexityMult: 1.25, mandelMult: 1.2, demonThreshold: 40, memoryMult: 1, permits: 0,
+      universeThreshold: 8.5, complexityMult: 1.25, mandelMult: 1.2, demonThreshold: 40, memoryMult: 1, scarMult: 1, permits: 0,
       briefing: [
         'Background causality is elevated here, so all three thresholds are lower. Is it unfair? Yes. Are we lowering them anyway? Also yes. Consider it motivation to go outside, goof.',
         'Complexity dissipates over time; the memory never does. Waiting cools the first meter, never the second. The simplest history wins — a bar so low that even you, allegedly, could clear it.'
@@ -109,7 +109,7 @@
     {
       name: 'SECTOR 06 — SANCTIONED BIG BANG',
       objective: 'Pot all particles. The inert particle requires gravitational assistance.',
-      universeThreshold: 11, complexityMult: 1, mandelMult: 1, demonThreshold: 44, memoryMult: 1, permits: 2,
+      universeThreshold: 11, complexityMult: 1, mandelMult: 1, demonThreshold: 44, memoryMult: 1, scarMult: 1, permits: 2,
       briefing: [
         'The dark particle has DECLINED TO PARTICIPATE IN CAUSALITY. Cue impacts barely move it. Frankly, relatable — it also saw you coming and wants no part of this.',
         'You’ve been issued 2 (two) BIG BANG PERMITS. Press U, click the table, deploy a micro-universe; its gravity moves what billiards can’t, and the ghost futures will curve to show it. Yes, you get to make a universe on purpose now. Try to act normal about it, goof.',
@@ -124,7 +124,7 @@
     {
       name: 'SECTOR 07 — ADMINISTRATIVE ZONE',
       objective: 'Pot all particles. Two inert. Recursion and memory both active.',
-      universeThreshold: 10, complexityMult: 1.1, mandelMult: 1.3, demonThreshold: 34, memoryMult: 1.15, permits: 3,
+      universeThreshold: 10, complexityMult: 1.1, mandelMult: 1.3, demonThreshold: 34, memoryMult: 1.15, scarMult: 1.15, permits: 3,
       briefing: [
         'Two inert particles, an active recursive attractor, a brisk complexity ceiling, and a memory that fills faster than standard. We set it up special. For you, goof.',
         'Deploying a universe to fix a problem caused by a universe is a proud tradition. Note that dropping Big Bangs in the same spot over and over looks, to the memory, a lot like intent — and to us, a lot like someone who should be at a park.'
@@ -137,7 +137,7 @@
     {
       name: 'SECTOR 08 — THE FULL RACK',
       objective: 'Final certification. All three disasters at once.',
-      universeThreshold: 9, complexityMult: 1.2, mandelMult: 1.4, demonThreshold: 30, memoryMult: 1.2, permits: 3,
+      universeThreshold: 9, complexityMult: 1.2, mandelMult: 1.4, demonThreshold: 30, memoryMult: 1.2, scarMult: 1.3, permits: 3,
       briefing: [
         'Ten particles. One inert. Low cosmogenesis ceiling, active recursion, an itchy memory, three permits. Every disaster at once, because we believe in you the exact right amount, which is a little.',
         'Clear this and you’re certified to inspect spacetime unsupervised, a sentence that keeps us up at night. We’ve pre-filled three incident reports — universe, mathematics, life — and one leaflet titled “Have You Considered Going Outside?” Read whichever applies, goof.'

@@ -196,6 +196,7 @@
   // Ghost-ball futures: simulate the shot with tiny variations to reveal the
   // uncertainty cloud. Recomputed only when the aim signature changes.
   const GHOST_N = 46;
+  const scarFn = (x, y) => M.scarForce(x, y);
   function computeGhosts(cue, v) {
     const key = (v.nx * 100 | 0) + ':' + (v.ny * 100 | 0) + ':' + (v.power * 100 | 0);
     if (G.ghostKey === key && G.ghosts) return G.ghosts;
@@ -208,11 +209,11 @@
       const ds = 1 + (Math.random() - 0.5) * (0.05 + v.power * 0.12);
       const ang = Math.atan2(v.ny, v.nx) + da;
       const sp = baseSpeed * ds;
-      const r = PH.simulate(G.balls, cue.id, Math.cos(ang) * sp, Math.sin(ang) * sp, 70, 0.04, K.wells);
+      const r = PH.simulate(G.balls, cue.id, Math.cos(ang) * sp, Math.sin(ang) * sp, 70, 0.04, K.wells, scarFn);
       paths.push(r.path);
     }
     // The mean / intended trajectory, drawn brighter.
-    const main = PH.simulate(G.balls, cue.id, v.nx * baseSpeed, v.ny * baseSpeed, 90, 0.04, K.wells);
+    const main = PH.simulate(G.balls, cue.id, v.nx * baseSpeed, v.ny * baseSpeed, 90, 0.04, K.wells, scarFn);
     G.ghosts = { paths, main: main.path };
     return G.ghosts;
   }
@@ -445,6 +446,13 @@
 
   // ---- Buttons ---------------------------------------------------------------
   $('btn-start').onclick = () => { G.score = 0; G.stats = newStats(); G.level = 0; showBriefing(0); };
+  const btnClear = $('btn-clear');
+  if (btnClear) btnClear.onclick = () => {
+    M.clearPersisted();
+    loadLevel(G.level);        // reload so the wiped scar grid takes effect immediately
+    updateMemoryReadout();
+    say('Timeline history erased. The table remembers nothing. For now. Enjoy your clean felt, goof.', 'ok');
+  };
   $('btn-begin').onclick = startLevel;
   $('btn-next').onclick = () => {
     G.level++;
@@ -465,6 +473,7 @@
     if (playing || G.state === 'cine_universe') {
       PH.step(G.balls, dt, hooks);
       K.update(dt, G.balls);
+      M.applyScars(dt, G.balls);
     }
     if (playing) {
       consumeCosmicEvents();
@@ -865,6 +874,19 @@
 
   // Boot: idle attract-mode table behind the title.
   loadLevel(0);
+  M.beginSession();
+  updateMemoryReadout();
   hide('hud'); hide('meter-wrap');
   requestAnimationFrame(frame);
+
+  function updateMemoryReadout() {
+    const el = $('title-memory');
+    if (!el) return;
+    const shots = M.lifetimeShots();
+    el.textContent = shots > 0
+      ? 'This table remembers ' + shots.toLocaleString() + ' trajector' + (shots === 1 ? 'y' : 'ies')
+        + ' from ' + (M.sessions || 1) + ' session' + ((M.sessions || 1) === 1 ? '' : 's') + '. It has not forgotten. It will not.'
+      : 'This table has no memory of you yet. Give it time, goof.';
+  }
+  CB.game.updateMemoryReadout = updateMemoryReadout;
 })();

@@ -135,7 +135,7 @@
   // Forward-simulate a hypothetical shot without touching real balls or cosmology.
   // Returns the cue ball's path (array of {x,y}) and the settled clone set.
   // Used for the ghost-futures uncertainty cloud shown while aiming.
-  PH.simulate = function (balls, cueId, vx, vy, steps, dt, wells) {
+  PH.simulate = function (balls, cueId, vx, vy, steps, dt, wells, scarFn) {
     const clones = [];
     for (const b of balls) {
       if (b.potted) continue;
@@ -158,6 +158,15 @@
           const d = Math.sqrt(d2) || 1;
           const acc = Math.min(1400, w.strength / Math.max(d2, 1600));
           b.vx += (dx / d) * acc * dt; b.vy += (dy / d) * acc * dt;
+        }
+      }
+      // Spacetime scarring curves the ghosts exactly as it will the real shot.
+      if (scarFn) {
+        for (const b of clones) {
+          if (b.potted) continue;
+          if (Math.hypot(b.vx, b.vy) < PH.REST_SPEED) continue;
+          const f = scarFn(b.x, b.y);
+          b.vx += f.fx * dt; b.vy += f.fy * dt;
         }
       }
       PH.step(clones, dt, noHooks);
