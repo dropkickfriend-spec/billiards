@@ -43,6 +43,16 @@
     K.ci = 0.42 * power01 * Math.sin(angle) + 0.13;
     K.zr = 0; K.zi = 0;
     K.shotFlags = {};
+    K.motionTime = 0;
+  };
+
+  // Perpetual motion strains causality: the longer particles run without being
+  // potted, the faster complexity accrues. Guarantees a shot that pots nothing
+  // eventually forms a universe rather than running forever.
+  K.motionStrain = function (dt) {
+    if (K.doomed) return;
+    K.motionTime = (K.motionTime || 0) + dt;
+    K.complexity += (0.5 + K.motionTime * 0.85) * dt * (K.cfg.complexityMult || 1);
   };
 
   // ---- Collisions ----------------------------------------------------------
@@ -50,7 +60,8 @@
     if (K.doomed) return;
 
     // Complexity from causal interaction (capped so one impact can't do it alone).
-    K.complexity += Math.min(5, impact * 0.006 * (K.cfg.complexityMult || 1));
+    // Lower per-hit now that frictionless motion means many more collisions.
+    K.complexity += Math.min(3.5, impact * 0.0035 * (K.cfg.complexityMult || 1));
 
     // Causal graph edge: faster ball imparted causality on the slower one.
     const spA = Math.hypot(a.vx, a.vy), spB = Math.hypot(b.vx, b.vy);
@@ -148,6 +159,13 @@
     // Complexity dissipates (half-life ~2.6 s).
     K.complexity *= Math.exp(-0.27 * dt);
     if (K.complexity < 0.01) K.complexity = 0;
+
+    // Raw overload backstop: sustained runaway complexity forms a universe even
+    // without a detected causal loop (e.g. a shot that pots nothing forever).
+    if (!K.doomed && K.complexity > K.threshold * 1.05) {
+      K.doomed = true;
+      emit('universe', { x: 640, y: 360 });
+    }
 
     // Prune dead causal edges.
     if (K.edges.length > 400) K.edges = K.edges.filter(e => K.time - e.t < CAUSAL_WINDOW);

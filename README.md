@@ -42,6 +42,15 @@ Gentle shots produce a tight, bright wave; hard breaks spray into chaos. When
 you **let go, the wave collapses** — the whole superposition of futures contracts
 to the single realized trajectory, and then you watch the sim play it out.
 
+### Constant motion
+
+There is **no friction**. The slingshot sets a kinetic energy and the table
+holds it exactly — particles careen and bounce at constant speed and never slow
+down. A shot only ends when you **pot a ball** (everything freezes and you line
+up the next one) or when the game ends. The longer particles run unpotted, the
+faster causal complexity accrues, so a shot that pots nothing eventually strains
+reality into a universe. The pressure is simple: **pot something, fast.**
+
 Every trajectory you actually shoot is then recorded **permanently** on the
 felt as faint residue. The table slowly accumulates a history of every shot
 ever taken, and that history is not just decoration — it drives the third loss

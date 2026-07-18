@@ -60,16 +60,12 @@
   };
 
   function substep(balls, h, hooks) {
-    const friction = Math.exp(-0.88 * h);
-
+    // Frictionless: particles hold their motion. Turn energy is kept constant by
+    // the game loop (renormalization); the shot only ends on a pot or game over.
     for (const b of balls) {
       if (b.potted) continue;
       b.x += b.vx * h;
       b.y += b.vy * h;
-      b.vx *= friction;
-      b.vy *= friction;
-      const sp = Math.hypot(b.vx, b.vy);
-      if (sp < PH.REST_SPEED * 0.6) { b.vx = 0; b.vy = 0; }
 
       // Pockets — checked before cushions so balls can fall in at corners.
       for (const p of PH.pockets) {
@@ -83,8 +79,8 @@
       }
       if (b.potted) continue;
 
-      // Cushions.
-      const T = TABLE, e = 0.9;
+      // Cushions — perfectly elastic so bounces preserve speed.
+      const T = TABLE, e = 1.0;
       let hit = 0;
       if (b.x - b.r < T.x)          { b.x = T.x + b.r; if (b.vx < 0) { hit = -b.vx; b.vx *= -e; } }
       else if (b.x + b.r > T.x + T.w) { b.x = T.x + T.w - b.r; if (b.vx > 0) { hit = b.vx; b.vx *= -e; } }
@@ -119,7 +115,7 @@
         const velN = rvx * nx + rvy * ny;
         if (velN > 0) continue; // separating
 
-        const rest = 0.96;
+        const rest = 1.0;   // elastic — collisions conserve kinetic energy
         const jImp = -(1 + rest) * velN / invSum;
         a.vx -= jImp * nx * invA; a.vy -= jImp * ny * invA;
         b.vx += jImp * nx * invB; b.vy += jImp * ny * invB;

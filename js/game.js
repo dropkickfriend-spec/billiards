@@ -41,7 +41,9 @@
     ghostKey: '',          // aim signature the cloud was computed for
     track: null,           // cue path being recorded during the live shot
     collapse: null,        // wave-collapse animation state after release
-    slowmo: 0              // seconds of post-collapse slow-motion remaining
+    slowmo: 0,             // seconds of post-collapse slow-motion remaining
+    perpetual: false,      // true while a fired shot runs at constant energy
+    shotEnergy: 0          // kinetic energy to hold during perpetual motion
   };
 
   function newStats() {
@@ -234,6 +236,8 @@
     const speed = 140 + v.power * 940;
     c.vx = v.nx * speed;
     c.vy = v.ny * speed;
+    G.shotEnergy = 0.5 * c.mass * speed * speed;   // energy held constant all turn
+    G.perpetual = true;
     G.stats.shots++;
     G.pottedThisShot = 0;
     G.track = [{ x: c.x, y: c.y }];
@@ -600,22 +604,17 @@
         if (c && !c.potted) G.track.push({ x: c.x, y: c.y });
       }
 
-      // Gravity wells can wake resting balls: fall back into 'shot'.
-      if (G.state === 'aim' && !PH.ballsAtRest(G.balls)) G.state = 'shot';
+      // Perpetual, constant-energy motion while a shot is live.
+      if (G.state === 'shot') {
+        if (G.perpetual) renormEnergy();       // hold the speed set by the slingshot
+        K.motionStrain(dt);                    // running particles strain causality
+        // A pot (or scratch) is what ends constant motion — freeze and resolve.
+        if ((G.pottedThisShot > 0 || G.scratched) && !K.doomed && !M.doomed) resolveTurn();
+      }
 
-      if (G.state === 'shot' && PH.ballsAtRest(G.balls) && !K.doomed && !M.doomed) {
-        K.onSettle();
-        // Commit the completed trajectory to permanent memory; may raise a demon.
-        if (G.track && G.track.length > 1) { M.record(G.track); G.track = null; }
-        consumeMemoryEvents();
-        if (M.doomed) return;   // demon cinematic took over
-        if (G.scratched) {
-          G.scratched = false;
-          respawnCue();
-        }
-        if (remainingTargets() === 0) { levelClear(); return; }
-        G.state = 'aim';
-        updateHud();
+      // A gravity well can set resting balls in motion (moving an inert particle).
+      if (G.state === 'aim' && !PH.ballsAtRest(G.balls)) {
+        G.state = 'shot'; G.perpetual = false; K.motionTime = 0;
       }
     } else if (G.state === 'collapse') {
       G.collapse.t += dt;
@@ -631,6 +630,32 @@
     }
 
     updateMeter();
+  }
+
+  // Keep total kinetic energy fixed at the slingshot-set value: constant motion.
+  function renormEnergy() {
+    if (!(G.shotEnergy > 0)) return;
+    let ke = 0;
+    for (const b of G.balls) if (!b.potted) ke += b.mass * (b.vx * b.vx + b.vy * b.vy);
+    ke *= 0.5;
+    if (ke < 1e-3) return;
+    let sc = Math.sqrt(G.shotEnergy / ke);
+    if (sc > 1.5) sc = 1.5; else if (sc < 0.6) sc = 0.6;   // damp sudden jumps
+    for (const b of G.balls) if (!b.potted) { b.vx *= sc; b.vy *= sc; }
+  }
+
+  // Constant motion ends the instant a ball drops: freeze and set up the next aim.
+  function resolveTurn() {
+    for (const b of G.balls) { b.vx = 0; b.vy = 0; }
+    G.perpetual = false;
+    K.onSettle();
+    if (G.track && G.track.length > 1) { M.record(G.track); G.track = null; }
+    consumeMemoryEvents();
+    if (M.doomed) return;                       // demon cinematic took over
+    if (G.scratched) { G.scratched = false; respawnCue(); }
+    if (remainingTargets() === 0) { levelClear(); return; }
+    G.state = 'aim';
+    updateHud();
   }
 
   function respawnCue() {
