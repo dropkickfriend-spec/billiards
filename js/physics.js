@@ -8,6 +8,7 @@
   PH.POCKET_R = 26;
   PH.REST_SPEED = 7;          // below this a ball is considered at rest
   PH.HEAD_SPOT = { x: TABLE.x + TABLE.w * 0.25, y: TABLE.y + TABLE.h / 2 };
+  const DET_R2 = 155 * 155;   // pocket-sorting field radius, squared
 
   PH.pockets = [
     { x: TABLE.x,               y: TABLE.y },
@@ -87,6 +88,21 @@
       if (b.y - b.r < T.y)          { b.y = T.y + b.r; if (b.vy < 0) { hit = Math.max(hit, -b.vy); b.vy *= -e; } }
       else if (b.y + b.r > T.y + T.h) { b.y = T.y + T.h - b.r; if (b.vy > 0) { hit = Math.max(hit, b.vy); b.vy *= -e; } }
       if (hit > 30 && hooks.onCushion) hooks.onCushion(b, hit);
+
+      // Pocket sorting fields: a pocket assigned a flavor pulls that flavor in
+      // and shoves the wrong ones away. Deterministic + inside PH.step, so the
+      // shadow and ghost sims get it too (it never counts as history deviation).
+      if (!b.cue && Math.hypot(b.vx, b.vy) > PH.REST_SPEED) {
+        for (const p of PH.pockets) {
+          if (!p.want) continue;
+          const dx = p.x - b.x, dy = p.y - b.y, d2 = dx * dx + dy * dy;
+          if (d2 > DET_R2 || d2 < 64) continue;
+          const d = Math.sqrt(d2);
+          const acc = (b.color === p.want ? 2.8e6 : -4.2e6) / d2;
+          b.vx += (dx / d) * acc * h;
+          b.vy += (dy / d) * acc * h;
+        }
+      }
     }
 
     // Ball-ball collisions.
@@ -136,7 +152,7 @@
     for (const b of balls) {
       if (b.potted) continue;
       clones.push({ x: b.x, y: b.y, vx: b.vx, vy: b.vy, r: b.r, mass: b.mass,
-                    potted: false, cue: b.cue, id: b.id, potX: 0, potY: 0 });
+                    potted: false, cue: b.cue, id: b.id, color: b.color, potX: 0, potY: 0 });
     }
     const cue = clones.find(c => c.id === cueId);
     if (!cue) return { path: [], clones };
