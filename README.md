@@ -159,6 +159,24 @@ like it's obvious.
 >
 > Penalty: 2 Points For Demon Formation
 
+## Tests
+
+There is a browser smoke test that loads the game the way players actually load
+it — `file://`, no server, no bundler — and asserts the things that would rot
+silently: that all six scripts land on the `CB` namespace, that `localStorage`
+works from a file origin (so scar persistence survives), that a shot can be
+aimed and fired, that the gauges read correctly in both armed and unarmed
+sectors, and that the rail placard stays clear of the meter panel and the centre
+pocket.
+
+```bash
+cd test && npm install && npm test
+```
+
+**The game itself still has zero dependencies.** The harness is confined to
+`test/` with its own `package.json`, so nothing in the repo root needs
+installing to play. It runs on every push via `.github/workflows/ci.yml`.
+
 ## Code layout
 
 - `js/engine.js` — utilities, particles, camera, starfield
