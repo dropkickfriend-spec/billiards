@@ -770,11 +770,30 @@
     say('We fished you back out of the pocket. Again. Try to stay in the universe, goof.', 'warn');
   }
 
+  // One regulatory gauge: bar fill, raw value / threshold, and a status word.
+  // A rule that isn't armed this sector has an infinite threshold — show it as
+  // unpowered rather than as a reassuring zero.
+  function setGauge(prefix, risk, value, threshold) {
+    $(prefix + '-fill').style.width = Math.min(100, risk * 100) + '%';
+    const val = $(prefix + '-val'), stat = $(prefix + '-stat'), row = $(prefix + '-row');
+    if (!isFinite(threshold)) {
+      row.classList.add('offline');
+      val.textContent = '— / —';
+      stat.textContent = 'OFFLINE';
+      stat.className = 'stat';
+      return;
+    }
+    row.classList.remove('offline');
+    val.textContent = value.toFixed(1) + ' / ' + threshold;
+    stat.textContent = risk < 0.62 ? 'STABLE' : risk < 0.96 ? 'ELEVATED' : 'CRITICAL';
+    stat.className = 'stat ' + (risk < 0.62 ? 'ok' : risk < 0.96 ? 'warn' : 'crit');
+  }
+
   function updateMeter() {
     const r = Math.max(K.risk(), M.risk());
     if (r > G.levelPeakRisk) G.levelPeakRisk = r;   // for the tidiness grade
-    $('meter-fill').style.width = Math.min(100, K.risk() * 100) + '%';
-    $('onto-fill').style.width = Math.min(100, M.risk() * 100) + '%';
+    setGauge('meter', K.risk(), K.complexity, K.threshold);
+    setGauge('onto', M.risk(), M.ontology, M.threshold);
     const it = $('iter-readout');
     if (G.state === 'cine_mandel') { it.classList.remove('hidden'); return; }
     if (K.iter > 20) {
@@ -796,7 +815,12 @@
     c.fillStyle = 'rgba(140,170,200,0.5)';
     c.font = '10px "Courier New", monospace';
     c.textAlign = 'center';
-    c.fillText('TABLE CERTIFIED FOR RECREATIONAL CAUSALITY — BUREAU OF RECREATIONAL COSMOLOGY — MAX 1 UNIVERSE (1)', T.x + T.w / 2, T.y + T.h + 47);
+    // Engraved on the bottom rail itself — below the rail it collided with the
+    // regulatory meter panel. Split into two plates so the centre pocket sits
+    // between them instead of through the lettering.
+    const plateY = T.y + T.h + 25;
+    c.fillText('TABLE CERTIFIED FOR RECREATIONAL CAUSALITY', T.x + T.w * 0.26, plateY);
+    c.fillText('BUREAU OF RECREATIONAL COSMOLOGY — MAX 1 UNIVERSE (1)', T.x + T.w * 0.74, plateY);
 
     // Felt: deep space green-blue.
     const g = c.createRadialGradient(T.x + T.w / 2, T.y + T.h / 2, 80, T.x + T.w / 2, T.y + T.h / 2, 620);

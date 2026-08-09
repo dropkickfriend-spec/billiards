@@ -81,6 +81,14 @@ The scar grid persists in `localStorage`, so the felt genuinely remembers every
 session you've ever played — the title screen tells you how many trajectories it
 has kept. Use **Clear Timeline History** to wipe it and start on clean felt.
 
+## Reading the instruments
+
+Each regulatory meter shows the bar, the **raw value against this sector's
+threshold** (`9.7 / 14`), and a status word — `STABLE` / `ELEVATED` / `CRITICAL`,
+banded to the tick marks on the bar. A rule that isn't armed in the current
+sector reads a dimmed `OFFLINE` rather than a reassuring zero, so an inactive
+Rule 3 no longer looks like a Rule 3 you're passing.
+
 ## How you lose
 
 **Rule 1 — No Universes.** Every collision generates causal complexity (the
