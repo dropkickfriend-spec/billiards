@@ -397,28 +397,60 @@
     return { paths, field, baseSpeed };
   }
 
-  let lastGhostTime = -1;
+  // The two-pass wave is by far the most expensive thing the game does, and it
+  // runs while aiming — every frame the aim changes. On a slow machine a full
+  // recompute can cost ~80ms, which is longer than the old fixed 45ms throttle,
+  // so the floor never bound and aiming collapsed to ~12fps. Both the quality
+  // and the interval now adapt to the measured cost, in real time (not game
+  // time, which is dt-capped and therefore lies on a slow machine).
+  const GHOST_N_MIN = 12;
+  const P1_N_MIN = 8;
+  // One 60fps frame is 16.7ms. Budget just under that: a machine that can afford
+  // the full wave inside a frame should keep all of it — an earlier 12ms budget
+  // silently halved the trajectory count on hardware that was coping fine.
+  const WAVE_BUDGET = 0.016;        // seconds
+  let waveScale = 1;                // 0.25..1 quality, adapts to the machine
+  let lastGhostCost = 0;            // seconds the previous recompute took
+  let lastGhostAt = -1e9;           // performance.now() ms of the previous recompute
+  const nowMs = () => (typeof performance !== 'undefined' && performance.now)
+    ? performance.now() : Date.now();
+
   function computeGhosts(cue, v) {
     const key = (v.nx * 100 | 0) + ':' + (v.ny * 100 | 0) + ':' + (v.power * 100 | 0);
     if (G.ghostKey === key && G.ghosts) return G.ghosts;
-    // Throttle the (heavy) two-pass recompute; reuse the cloud between ticks.
-    if (G.ghosts && G.time - lastGhostTime < 0.045) return G.ghosts;
-    lastGhostTime = G.time;
+    // Never let the wave eat the frame. Wait 4x its own measured cost between
+    // recomputes, so it can account for at most ~1/4 of the time budget. A
+    // smaller multiplier is useless on a slow machine, where the frame is
+    // already longer than the gap and the wave would run every frame anyway.
+    const t = nowMs();
+    const minGapMs = Math.max(45, lastGhostCost * 4000);
+    if (G.ghosts && t - lastGhostAt < minGapMs) return G.ghosts;
+    lastGhostAt = t;
     G.ghostKey = key;
 
+    const n1 = Math.max(P1_N_MIN, Math.round(P1_N * waveScale));
+    const n2 = Math.max(GHOST_N_MIN, Math.round(GHOST_N * waveScale));
+
     // Pass 1: coarse unfocused wave -> density field.
-    const p1 = simFan(cue, v, null, P1_N);
+    const p1 = simFan(cue, v, null, n1);
     // Pass 2: full wave, now gravitating toward pass-1 density -> self-focused.
     const grav = fieldForce(p1.field, 620);
-    const p2 = simFan(cue, v, grav, GHOST_N);
+    const p2 = simFan(cue, v, grav, n2);
 
     const main = PH.simulate(G.balls, cue.id, v.nx * p2.baseSpeed, v.ny * p2.baseSpeed,
       90, GDT, K.wells, scarFn, grav);
 
     G.ghosts = { paths: p2.paths, field: p2.field, main: main.path,
                  gx: DGX, gy: DGY, cell: DCELL };
+
+    lastGhostCost = (nowMs() - t) / 1000;
+    // Shed detail on a machine that can't afford it; take it back when it can.
+    if (lastGhostCost > WAVE_BUDGET) waveScale = Math.max(0.25, waveScale * 0.8);
+    else if (lastGhostCost < WAVE_BUDGET * 0.5) waveScale = Math.min(1, waveScale * 1.08);
     return G.ghosts;
   }
+  // Exposed so the test harness can assert the wave adapts under load.
+  G.waveStats = () => ({ scale: waveScale, cost: lastGhostCost });
 
   // ---- Physics hooks ---------------------------------------------------------
   const hooks = {

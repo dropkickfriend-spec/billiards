@@ -193,6 +193,18 @@ try {
   check('a missed shot ends on its own (shot clock)', !stillLive,
     stillLive ? `still live after ${(liveMs / 1000).toFixed(1)}s` : `resolved`);
 
+  // ---- The probability wave stays inside its time budget -------------------
+  // The two-pass wave is the most expensive thing the game does and it runs
+  // while aiming. It must shed detail rather than eat the frame.
+  const wave = await page.evaluate(() => CB.game.waveStats && CB.game.waveStats());
+  check('wave exposes adaptive stats', !!wave, wave ? JSON.stringify(wave) : 'missing');
+  if (wave) {
+    check('wave quality stays within its clamp', wave.scale >= 0.25 && wave.scale <= 1,
+      `scale ${wave.scale.toFixed(2)}`);
+    check('wave recompute stays inside a sane budget', wave.cost < 0.05,
+      `last recompute ${(wave.cost * 1000).toFixed(1)}ms`);
+  }
+
   // ---- Cushion containment at the raised top speed -------------------------
   const phys = await page.evaluate(() => ({ esc: window.__esc, maxSpeed: window.__maxSpeed }));
   check('no ball tunnels through a cushion', phys.esc < 2,

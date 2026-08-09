@@ -50,6 +50,13 @@ Gentle shots produce a tight, bright wave; hard breaks spray into chaos. When
 you **let go, the wave collapses** — the whole superposition of futures contracts
 to the single realized trajectory, and then you watch the sim play it out.
 
+The wave is the most expensive thing the game does, and it runs while you aim, so
+it **adapts to your machine**: it measures its own recompute cost and sheds
+trajectories (down to a floor) and recomputes less often until it fits inside the
+frame. A fast machine shows a denser cloud; a slow one shows a thinner cloud but
+keeps the aim responsive. That trade is deliberate — dragging to aim needs to
+feel immediate more than the cloud needs to be thick.
+
 ### Constant motion
 
 There is **no friction**. The slingshot sets a kinetic energy and the table
