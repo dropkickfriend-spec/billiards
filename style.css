@@ -110,9 +110,9 @@ html, body {
 /* ---------- Complexity meter ---------- */
 #meter-wrap {
   position: absolute;
-  bottom: 10px; left: 50%;
+  bottom: 6px; left: 50%;
   transform: translateX(-50%);
-  width: 460px;
+  width: 620px;
   padding: 8px 12px 6px;
   background: rgba(4, 8, 14, 0.72);
   border: 1px solid rgba(255,255,255,0.08);
@@ -153,6 +153,29 @@ html, body {
   width: 1px; height: 100%;
   background: rgba(255,255,255,0.35);
 }
+/* Numeric instrument readout beside each bar: raw value / threshold + status. */
+.meter-read {
+  width: 148px;
+  flex: none;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 10px;
+  letter-spacing: 0.5px;
+}
+.meter-read .val {
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.meter-read .stat { font-weight: bold; letter-spacing: 1px; }
+.meter-read .stat.ok   { color: var(--ok); }
+.meter-read .stat.warn { color: #d9c34a; }
+.meter-read .stat.crit { color: var(--danger); animation: blink 0.8s steps(2) infinite; }
+/* A rule that isn't in force this sector reads as unpowered, not as "all clear". */
+.meter-row.offline { opacity: 0.34; }
+.meter-row.offline .stat { color: var(--dim); animation: none; }
 #meter-zones {
   display: flex;
   justify-content: space-between;
@@ -160,6 +183,7 @@ html, body {
   color: var(--dim);
   margin-top: 2px;
   margin-left: 160px;
+  margin-right: 156px;
   letter-spacing: 1px;
 }
 #meter-zones .danger { color: var(--danger); }
