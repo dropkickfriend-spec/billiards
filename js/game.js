@@ -44,6 +44,7 @@
     slowmo: 0,             // seconds of post-collapse slow-motion remaining
     perpetual: false,      // true while a fired shot runs at constant energy
     shotEnergy: 0,         // kinetic energy to hold during perpetual motion
+    shotClock: 0,          // seconds the current shot has been live (see SHOT_CLOCK)
     shadow: null           // history-free parallel world; deviation from it = complexity
   };
 
@@ -238,7 +239,7 @@
     if (!v || !c || v.power < 0.04) return;
     const g = computeGhosts(c, v);
     G.collapse = {
-      t: 0, dur: 0.5,
+      t: 0, dur: 0.28,
       v: { nx: v.nx, ny: v.ny, power: v.power },
       paths: g.paths.map(p => p.slice()),
       main: g.main.slice(),
@@ -255,16 +256,17 @@
     G.collapse = null;
     if (!c) { G.state = 'aim'; return; }
     const v = col.v;
-    const speed = 140 + v.power * 940;
+    const speed = shotSpeed(v.power);
     c.vx = v.nx * speed;
     c.vy = v.ny * speed;
     G.shotEnergy = 0.5 * c.mass * speed * speed;   // energy held constant all turn
     G.perpetual = true;
+    G.shotClock = 0;
     G.stats.shots++;
     G.pottedThisShot = 0;
     G.track = [{ x: c.x, y: c.y }];
     G.ghosts = null; G.ghostKey = '';
-    G.slowmo = 0.55;                  // brief slow-mo so we "watch the sim" resolve
+    G.slowmo = 0.3;                   // brief slow-mo so we "watch the sim" resolve
     K.onShot(Math.atan2(v.ny, v.nx), v.power);
     CB.particles.spark(c.x, c.y, 14, speed * 0.5, '#bfe6ff');
     cam.addShake(2 + v.power * 3);
@@ -277,6 +279,20 @@
   // real balls and their shadow is exactly the deviation history forces — and
   // that is the causal complexity. A clean table has no scars, so the two worlds
   // stay identical (zero complexity); a scarred table drags them apart.
+  // How long a live shot may run before the Bureau loses interest. There is no
+  // friction, so nothing else ever ends a miss. Longer while a micro-universe is
+  // deployed, because watching particles fall into orbit is the point there.
+  const SHOT_CLOCK = 5;
+  const SHOT_CLOCK_ORBIT = 12;
+
+  // Slingshot power -> cue speed. Single source of truth: the real shot and the
+  // ghost-futures wave MUST agree, or the preview lies about where the ball goes,
+  // which is the one thing the probability wave promises not to do.
+  // Top speed is bounded by the substep budget: PH.step runs SUB=4 substeps at
+  // dt <= 0.033, so h <= 0.00825s. At 1300px/s a ball moves 10.7px per substep,
+  // comfortably inside the 14px ball radius — no tunnelling through contacts.
+  function shotSpeed(power01) { return 200 + power01 * 1100; }
+
   const DEV_CAP = 140;   // px, per ball — one chaotic collision can't max it alone
   function spawnShadow() {
     G.shadow = G.balls.map(b => ({
@@ -363,7 +379,7 @@
   const ZEROF = { fx: 0, fy: 0 };
 
   function simFan(cue, v, gravity, n) {
-    const baseSpeed = 140 + v.power * 940;
+    const baseSpeed = shotSpeed(v.power);
     const spread = 0.02 + v.power * 0.085;   // wider wave than before
     const base = Math.atan2(v.ny, v.nx);
     const paths = [];
@@ -703,11 +719,20 @@
         stepShadow(dt);                        // complexity = deviation from the shadow
         // A pot (or scratch) is what ends constant motion — freeze and resolve.
         if ((G.pottedThisShot > 0 || G.scratched) && !K.doomed && !M.doomed) resolveTurn();
+        else if (!K.doomed && !M.doomed) {
+          // Frictionless motion never stops on its own, so a miss would run
+          // forever while the player watched. Give the shot a clock.
+          G.shotClock += dt;
+          if (G.shotClock > (K.wells.length ? SHOT_CLOCK_ORBIT : SHOT_CLOCK)) {
+            say('Shot abandoned. The particles are still moving; they are simply no longer your jurisdiction, goof.', 'warn');
+            resolveTurn();
+          }
+        }
       }
 
       // A gravity well can set resting balls in motion (moving an inert particle).
       if (G.state === 'aim' && !PH.ballsAtRest(G.balls)) {
-        G.state = 'shot'; G.perpetual = false; spawnShadow();
+        G.state = 'shot'; G.perpetual = false; G.shotClock = 0; spawnShadow();
       }
     } else if (G.state === 'collapse') {
       G.collapse.t += dt;
@@ -770,13 +795,21 @@
     say('We fished you back out of the pocket. Again. Try to stay in the universe, goof.', 'warn');
   }
 
+  // Rule 1's meter can only move if history has force behind it: complexity is
+  // deviation from the predicted Newtonian path, and only the scar field bends
+  // balls off that path. Sectors with scarMult 0 therefore pin it at zero, which
+  // would otherwise read as "you are safely passing" rather than "not in force".
+  function rule1Armed() {
+    return M.scarStrength > 0 && !!K.cfg && (K.cfg.complexityMult || 0) > 0;
+  }
+
   // One regulatory gauge: bar fill, raw value / threshold, and a status word.
-  // A rule that isn't armed this sector has an infinite threshold — show it as
-  // unpowered rather than as a reassuring zero.
-  function setGauge(prefix, risk, value, threshold) {
+  // A rule that isn't armed this sector is shown unpowered rather than as a
+  // reassuring zero.
+  function setGauge(prefix, risk, value, threshold, armed) {
     $(prefix + '-fill').style.width = Math.min(100, risk * 100) + '%';
     const val = $(prefix + '-val'), stat = $(prefix + '-stat'), row = $(prefix + '-row');
-    if (!isFinite(threshold)) {
+    if (!isFinite(threshold) || armed === false) {
       row.classList.add('offline');
       val.textContent = '— / —';
       stat.textContent = 'OFFLINE';
@@ -792,7 +825,7 @@
   function updateMeter() {
     const r = Math.max(K.risk(), M.risk());
     if (r > G.levelPeakRisk) G.levelPeakRisk = r;   // for the tidiness grade
-    setGauge('meter', K.risk(), K.complexity, K.threshold);
+    setGauge('meter', K.risk(), K.complexity, K.threshold, rule1Armed());
     setGauge('onto', M.risk(), M.ontology, M.threshold);
     const it = $('iter-readout');
     if (G.state === 'cine_mandel') { it.classList.remove('hidden'); return; }

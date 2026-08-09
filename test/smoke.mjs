@@ -1,10 +1,11 @@
 // Demon Billiards — browser smoke test.
 //
 // Loads the game the way players actually load it (file://, no server, no
-// bundler) and asserts the things that would silently rot: that all six
-// scripts land on the CB namespace, that a shot can be aimed and fired, that
-// the regulatory gauges read correctly in both armed and unarmed sectors, and
-// that the rail placard stays clear of the meter panel.
+// bundler) and asserts the things that would silently rot: the CB namespace,
+// file-origin localStorage, an aimable and firable shot, the probability wave
+// agreeing with the speed the shot really fires at, a missed shot terminating
+// on its own, cushion containment at top speed, the gauges reading correctly
+// both armed and unarmed, and the rail placard clearing the meter panel.
 //
 //   cd test && npm install && npm test
 //
@@ -35,6 +36,23 @@ const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
 // Record the placard's real draw calls rather than recomputing its position —
 // a layout assertion that hardcodes the coordinate it is checking cannot fail.
 await page.addInitScript(() => {
+  // Sample ball containment and speed continuously: tunnelling through a cushion
+  // is transient and would be invisible to a check that only reads end state.
+  window.__esc = 0;
+  window.__maxSpeed = 0;
+  setInterval(() => {
+    if (typeof CB === 'undefined' || !CB.physics || !CB.game) return;
+    const T = CB.physics.TABLE, r = CB.physics.BALL_R;
+    for (const b of (CB.game.balls || [])) {
+      if (b.potted) continue;
+      const worst = Math.max((T.x + r) - b.x, b.x - (T.x + T.w - r),
+                             (T.y + r) - b.y, b.y - (T.y + T.h - r));
+      if (worst > window.__esc) window.__esc = worst;
+      const s = Math.hypot(b.vx, b.vy);
+      if (s > window.__maxSpeed) window.__maxSpeed = s;
+    }
+  }, 8);
+
   window.__placard = [];
   const orig = CanvasRenderingContext2D.prototype.fillText;
   CanvasRenderingContext2D.prototype.fillText = function (text, x, y) {
@@ -96,43 +114,106 @@ try {
     oVal: document.getElementById('onto-val').textContent,
     oStat: document.getElementById('onto-stat').textContent,
     oOffline: document.getElementById('onto-row').classList.contains('offline'),
+    cOffline: document.getElementById('meter-row').classList.contains('offline'),
     cThreshold: CB.cosmic.threshold,
     mThreshold: CB.memory.threshold
   }));
 
   const g1 = await readGauges();
-  check('complexity gauge reads value against the sector threshold',
-    g1.cVal === '0.0 / ' + g1.cThreshold, `got "${g1.cVal}", threshold ${g1.cThreshold}`);
-  check('complexity gauge reads STABLE at rest', g1.cStat === 'STABLE', `got "${g1.cStat}"`);
+  // Sector 1 arms nothing: no scars means complexity cannot move, and Rule 3's
+  // threshold is infinite. Both must say so rather than showing a passing zero.
+  check('unarmed Rule 1 reads OFFLINE (no scars, so complexity cannot move)',
+    g1.cStat === 'OFFLINE' && g1.cOffline === true,
+    `stat "${g1.cStat}", val "${g1.cVal}", dimmed ${g1.cOffline}`);
   check('unarmed Rule 3 reads OFFLINE, not a passing zero',
     g1.oStat === 'OFFLINE' && g1.oVal === '— / —' && g1.oOffline === true,
     `stat "${g1.oStat}", val "${g1.oVal}", dimmed ${g1.oOffline}`);
 
   // ---- A shot can actually be aimed and fired ------------------------------
-  const box = await page.locator('#game').boundingBox();
-  const ox = box.x + box.width * 0.30, oy = box.y + box.height * 0.5;
+  // Record the speeds the probability wave simulates its futures at, so we can
+  // check the preview agrees with the shot the player actually gets.
+  await page.evaluate(() => {
+    window.__waveSpeeds = [];
+    const orig = CB.physics.simulate;
+    CB.physics.simulate = function (balls, id, vx, vy) {
+      window.__waveSpeeds.push(Math.hypot(vx, vy));
+      return orig.apply(this, arguments);
+    };
+  });
+
+  // Pull far enough to max the power, measured in canvas units (power saturates
+  // at a 250px pull), so the shot exercises the top of the speed range.
+  const geo = await page.evaluate(() => {
+    const f = document.getElementById('frame').getBoundingClientRect();
+    const c = (CB.game.balls || []).find(b => b.cue && !b.potted);
+    return { l: f.left, t: f.top, s: f.width / 1280, cx: c.x, cy: c.y };
+  });
+  const ox = geo.l + geo.cx * geo.s, oy = geo.t + geo.cy * geo.s;
+  const pull = 260 * geo.s;
   await page.mouse.move(ox, oy);
   await page.mouse.down();
-  await page.mouse.move(ox - 140, oy - 70, { steps: 12 });
-  const waveWhileAiming = await page.evaluate(() => !!(CB.game.aiming || CB.game.drag || CB.game.pulling));
+  await page.mouse.move(ox - pull * 0.7, oy - pull * 0.7, { steps: 12 });
+  const waveWhileAiming = await page.evaluate(() => window.__waveSpeeds.length > 0);
+  check('aiming fans out a probability wave', waveWhileAiming,
+    (await page.evaluate(() => window.__waveSpeeds.length)) + ' futures simulated');
+
+  await page.evaluate(() => { window.__maxSpeed = 0; });   // reset before release
   await page.mouse.up();
-  await page.waitForTimeout(1500);
+  await page.waitForTimeout(600);   // wave collapse (0.28s) must finish before the shot exists
+  const speeds = await page.evaluate(() => {
+    // Only the final wave batch corresponds to the full pull — earlier batches
+    // were computed at intermediate, weaker pulls as the drag grew.
+    const w = window.__waveSpeeds.slice(-50).sort((a, b) => a - b);
+    return { realized: window.__maxSpeed, waveMedian: w.length ? w[Math.floor(w.length / 2)] : 0 };
+  });
+  // Ghost futures jitter their speed by up to ~10%, so allow that but no more:
+  // a systematic mismatch means the two formulas have drifted apart.
+  const drift = speeds.waveMedian ? Math.abs(speeds.realized - speeds.waveMedian) / speeds.realized : 1;
+  check('probability wave predicts the speed the shot actually fires at', drift < 0.12,
+    `realized ${speeds.realized.toFixed(0)}px/s vs wave median ${speeds.waveMedian.toFixed(0)}px/s (${(drift * 100).toFixed(1)}% drift)`);
+
+  await page.waitForTimeout(900);
   const moving = await page.evaluate(() =>
     (CB.game.balls || []).filter(b => Math.hypot(b.vx || 0, b.vy || 0) > 0.01).length);
-  check('slingshot drag registers an aim', waveWhileAiming !== false || moving > 0);
   check('released shot puts a particle in motion (frictionless: still moving)', moving > 0,
     moving + ' ball(s) in motion');
+
+  // ---- The shot clock bounds a miss ----------------------------------------
+  // Nothing else can end a frictionless miss, so without a clock the shot runs
+  // until the player gives up. Assert it terminates on its own.
+  const CLOCK_BOUND_MS = 9000;   // SHOT_CLOCK is 5s; leave room for collapse + slow-mo
+  const clockStart = Date.now();
+  let liveMs = 0;
+  while (await page.evaluate(() => CB.game.state) === 'shot') {
+    liveMs = Date.now() - clockStart;
+    if (liveMs > CLOCK_BOUND_MS) break;
+    await page.waitForTimeout(150);
+  }
+  const stillLive = await page.evaluate(() => CB.game.state) === 'shot';
+  check('a missed shot ends on its own (shot clock)', !stillLive,
+    stillLive ? `still live after ${(liveMs / 1000).toFixed(1)}s` : `resolved`);
+
+  // ---- Cushion containment at the raised top speed -------------------------
+  const phys = await page.evaluate(() => ({ esc: window.__esc, maxSpeed: window.__maxSpeed }));
+  check('no ball tunnels through a cushion', phys.esc < 2,
+    `worst escape ${phys.esc.toFixed(2)}px at peak ${phys.maxSpeed.toFixed(0)}px/s`);
+  check('peak speed stays inside the substep budget', phys.maxSpeed * 0.033 / 4 < 14,
+    `${(phys.maxSpeed * 0.033 / 4).toFixed(1)}px per substep vs 14px ball radius`);
 
   // ---- Gauges, Rule 3 armed ------------------------------------------------
   // Drive both meters to known risks rather than waiting on emergent play.
   await page.evaluate(() => {
     CB.memory.threshold = 100;
     CB.memory.ontology = 98;             // 0.98 -> CRITICAL
+    CB.memory.scarStrength = 50;         // arms Rule 1
     CB.cosmic.complexity = CB.cosmic.threshold * 0.75;  // 0.75 -> ELEVATED
   });
   await page.waitForTimeout(300);
   const g2 = await readGauges();
   check('armed Rule 3 clears the OFFLINE dim', g2.oOffline === false);
+  check('armed Rule 1 clears the OFFLINE dim and shows numbers',
+    g2.cOffline === false && /^\d+\.\d \/ \d+$/.test(g2.cVal),
+    `dimmed ${g2.cOffline}, val "${g2.cVal}"`);   // value decays: match format, not a number
   check('gauge bands at 0.75 -> ELEVATED', g2.cStat === 'ELEVATED', `got "${g2.cStat}"`);
   check('gauge bands at 0.98 -> CRITICAL', g2.oStat === 'CRITICAL', `got "${g2.oStat}"`);
   check('armed gauge reads value against threshold', g2.oVal === '98.0 / 100', `got "${g2.oVal}"`);

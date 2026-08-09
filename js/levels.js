@@ -50,12 +50,12 @@
   CB.LEVELS = [
     {
       name: 'SECTOR 01 — ORIENTATION',
-      objective: 'Pot all particles. Do not create a universe.',
+      objective: 'Pot all particles. Nothing you do here can create a universe. Yet.',
       universeThreshold: 14, complexityMult: 0.8, mandelMult: 0, demonThreshold: Infinity, memoryMult: 1, scarMult: 0, permits: 0,
       briefing: [
         'Welcome to the Table Inspection Division, goof. We had other applicants. We chose you. We think about this daily.',
         'The balls are fundamental particles. When you aim, you’ll see the ghost-ball futures: hundreds of faint trajectories, one for every way this could go wrong. Reality records every single one, including the ones where you clearly weren’t trying.',
-        'Keep the CAUSAL COMPLEXITY meter out of the GAME OVER band. Form a self-sustaining loop while it’s critical and you make a universe. Or — thought exercise — don’t, and go outside instead. Your call. It’s three particles. How hard could it be. (Very.)'
+        'Both regulatory meters read OFFLINE, because this felt is clean. Complexity is how far history drags a particle off the path we predicted for it, and virgin felt has no history, so the prediction is perfect and reality has nothing to notice. You could not create a universe today if you tried. You will not be this safe again. Or — thought exercise — leave now, while your record is spotless. It’s three particles. How hard could it be. (Very.)'
       ],
       setup(out) { cue(out);
         out.push(PH.makeBall(cx - 40, cy, FLAVORS[0]));
@@ -65,11 +65,11 @@
     },
     {
       name: 'SECTOR 02 — STANDARD INSPECTION',
-      objective: 'Pot all particles. Do not create a universe.',
+      objective: 'Pot all particles. Still nothing can go wrong. Suspicious, isn’t it.',
       universeThreshold: 12, complexityMult: 1, mandelMult: 0, demonThreshold: Infinity, memoryMult: 1, scarMult: 0, permits: 0,
       briefing: [
         'A routine six-particle table. The last inspector retired after “an incident involving geometry.” They also should have gone outside. They did not. Learn from them, goof.',
-        'Gentle shots make less complexity and a tighter cloud. Hard breaks are spectacular, legal, and how most universes get made by people exactly like you.'
+        'Gentle shots make a tighter probability wave; hard breaks spray it into chaos. Nothing is armed yet, so both are equally survivable. Note, however, that the felt is already recording every trajectory you shoot. It simply has no way to use them against you yet. It learns that in sector four.'
       ],
       setup(out) { cue(out); rack(3, cx, cy, out); }
     },
@@ -79,7 +79,8 @@
       universeThreshold: 12, complexityMult: 1, mandelMult: 1, demonThreshold: Infinity, memoryMult: 1, scarMult: 0, permits: 0,
       briefing: [
         'This table sits inside a recursive attractor. Each shot seeds an iteration sequence; most diverge harmlessly. Yours won’t, because nothing you do is harmless, goof.',
-        'If it stays bounded, the table starts containing smaller copies of itself, and at iteration 500 containment fails. Potting a particle vents the mathematics. You know what else vents mathematics? Being at a park, having none of these problems.'
+        'If it stays bounded, the table starts containing smaller copies of itself, and at iteration 500 containment fails. Potting a particle vents the mathematics. You know what else vents mathematics? Being at a park, having none of these problems.',
+        'CAUSAL COMPLEXITY still reads OFFLINE — the felt has no scar tissue yet, so nothing can drag a particle off its predicted path. Mathematics, unfortunately, does not require scar tissue. Mathematics just needs you to take a shot.'
       ],
       setup(out) { cue(out); rack(3, cx, cy, out); }
     },

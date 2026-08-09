@@ -15,10 +15,18 @@ The referee treats accidentally inventing a cosmos as an ordinary pool foul.
 
 ## Play
 
-No build step, no dependencies. Either:
+No build step, no dependencies, **no server**. Just open the file:
 
-- open `index.html` directly in a browser, or
-- serve the folder: `python3 -m http.server` and visit http://localhost:8000
+| | |
+| --- | --- |
+| macOS / Linux | `open index.html` |
+| Windows (CMD or PowerShell) | `start index.html` |
+| any OS | double-click `index.html` |
+
+It runs fully from `file://`, including the cross-session scar memory. A local
+server is optional and buys you nothing — but if you want one anyway, use
+`npx serve`, or `py -m http.server 8000` on Windows (plain `python3` is usually
+a Microsoft Store stub that isn't installed).
 
 **Controls**
 
@@ -46,9 +54,11 @@ to the single realized trajectory, and then you watch the sim play it out.
 
 There is **no friction**. The slingshot sets a kinetic energy and the table
 holds it exactly — particles careen and bounce at constant speed and never slow
-down. A shot only ends when you **pot a ball** (everything freezes and you line
-up the next one) or when the game ends. Balls can even settle into **orbits**
-around a micro-universe you deploy.
+down. A shot ends when you **pot a ball** (everything freezes and you line up the
+next one), when the game ends, or when the **shot clock** runs out — because with
+no friction a miss would otherwise careen forever while you watched it. The
+Bureau gives a shot 5 seconds to achieve something, or 12 while a micro-universe
+is deployed, since watching particles fall into **orbit** is the point there.
 
 ### Complexity is deviation from prediction
 
@@ -86,14 +96,18 @@ has kept. Use **Clear Timeline History** to wipe it and start on clean felt.
 Each regulatory meter shows the bar, the **raw value against this sector's
 threshold** (`9.7 / 14`), and a status word — `STABLE` / `ELEVATED` / `CRITICAL`,
 banded to the tick marks on the bar. A rule that isn't armed in the current
-sector reads a dimmed `OFFLINE` rather than a reassuring zero, so an inactive
-Rule 3 no longer looks like a Rule 3 you're passing.
+sector reads a dimmed `OFFLINE` rather than a reassuring zero — so a rule that
+doesn't exist yet no longer looks like a rule you're comfortably passing. In
+sector 1 that means *both* meters read `OFFLINE`, which is the honest reading
+(see Progression).
 
 ## How you lose
 
-**Rule 1 — No Universes.** Every collision generates causal complexity (the
-top meter). Normally it dissipates. But if collisions form a self-sustaining
-causal loop (A → B → C → A) while complexity is critical:
+**Rule 1 — No Universes.** Causal complexity (the top meter) is *deviation from
+prediction*: the Bureau records where pure Newtonian physics says every ball will
+go, and the accumulated scar field then drags the real balls off that path. The
+size of that gap accumulates as complexity, and dissipates when the table is
+calm. Push it past the sector threshold and:
 
 > **GAME OVER — Universe Formation Detected**
 
@@ -140,11 +154,24 @@ mess), because the whole point is that the disturbance is *real*.
 
 ## Progression
 
-Eight sectors. Early on it's just *don't create a universe*. Then recursion
-switches on (Rule 2). Sector 4 introduces the memory and Rule 3. Late sectors
-run all three disasters at once with lowered thresholds — and sometimes require
-you to deploy a permitted, pocket-sized Big Bang to move a particle that has
-*declined to participate in causality*.
+Eight sectors, and the hazards arm one at a time. Sectors 1–2 are genuinely
+unloseable: complexity comes only from scar-driven deviation, and the early felt
+has no scars, so both meters read `OFFLINE`. Recursion (Rule 2) switches on in
+sector 3. Sector 4 is the real beginning — it turns on scarring, so Rule 1
+finally becomes reachable, and introduces the memory and Rule 3 together. Late
+sectors run all three disasters at once with lowered thresholds — and sometimes
+require you to deploy a permitted, pocket-sized Big Bang to move a particle that
+has *declined to participate in causality*.
+
+| Sector | Rule 1 universe | Rule 2 mandelbrot | Rule 3 demon |
+| --- | --- | --- | --- |
+| 1–2 | — | — | — |
+| 3 | — | ✓ | — |
+| 4 | ✓ | — | ✓ |
+| 5–8 | ✓ | ✓ | ✓ |
+
+The opening sectors being safe is deliberate: the Bureau threatens you long
+before it can actually do anything about you.
 
 ## Tone
 
@@ -163,11 +190,19 @@ like it's obvious.
 
 There is a browser smoke test that loads the game the way players actually load
 it — `file://`, no server, no bundler — and asserts the things that would rot
-silently: that all six scripts land on the `CB` namespace, that `localStorage`
-works from a file origin (so scar persistence survives), that a shot can be
-aimed and fired, that the gauges read correctly in both armed and unarmed
-sectors, and that the rail placard stays clear of the meter panel and the centre
-pocket.
+silently:
+
+- all six scripts land on the `CB` namespace, and `localStorage` works from a
+  file origin (so scar persistence survives);
+- a shot can be aimed and fired, and **the probability wave predicts the speed
+  the shot actually fires at** — the preview and the real shot read their speed
+  from one `shotSpeed()`, and drift between them is a bug;
+- **a missed shot ends on its own.** There is no friction, so nothing else can
+  end one;
+- no ball tunnels a cushion at top speed, and travel per substep stays inside
+  the ball radius;
+- the gauges read correctly armed *and* unarmed, and the rail placard clears both
+  the meter panel and the centre pocket.
 
 ```bash
 cd test && npm install && npm test
@@ -181,7 +216,7 @@ installing to play. It runs on every push via `.github/workflows/ci.yml`.
 
 - `js/engine.js` — utilities, particles, camera, starfield
 - `js/physics.js` — table geometry, ball collisions, pockets, aim raycasts, and the forward simulator that generates ghost futures
-- `js/cosmic.js` — Rule 1 (causal graph + loop detection) and Rule 2 (the hidden Mandelbrot iterator), plus micro-universe gravity wells
+- `js/cosmic.js` — Rule 1 (`deviationStrain`: complexity accumulated from departure off the predicted path) and Rule 2 (the hidden Mandelbrot iterator), plus micro-universe gravity wells
 - `js/memory.js` — Rule 3: the permanent trajectory memory, its compressibility / self-reference / predictiveness estimate, and demon detection
 - `js/levels.js` — the eight sectors and their thresholds
 - `js/game.js` — game states, input, rendering, cinematics, the deadpan referee
