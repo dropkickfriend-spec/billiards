@@ -1,0 +1,12 @@
+{
+  "name": "demon-billiards-test",
+  "private": true,
+  "type": "module",
+  "description": "Dev-only browser harness. The game itself has no dependencies — nothing here is needed to play it.",
+  "scripts": {
+    "test": "node smoke.mjs"
+  },
+  "devDependencies": {
+    "playwright": "^1.49.0"
+  }
+}

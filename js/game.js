@@ -44,6 +44,7 @@
     slowmo: 0,             // seconds of post-collapse slow-motion remaining
     perpetual: false,      // true while a fired shot runs at constant energy
     shotEnergy: 0,         // kinetic energy to hold during perpetual motion
+    shotClock: 0,          // seconds the current shot has been live (see SHOT_CLOCK)
     shadow: null           // history-free parallel world; deviation from it = complexity
   };
 
@@ -238,7 +239,7 @@
     if (!v || !c || v.power < 0.04) return;
     const g = computeGhosts(c, v);
     G.collapse = {
-      t: 0, dur: 0.5,
+      t: 0, dur: 0.28,
       v: { nx: v.nx, ny: v.ny, power: v.power },
       paths: g.paths.map(p => p.slice()),
       main: g.main.slice(),
@@ -255,16 +256,17 @@
     G.collapse = null;
     if (!c) { G.state = 'aim'; return; }
     const v = col.v;
-    const speed = 140 + v.power * 940;
+    const speed = shotSpeed(v.power);
     c.vx = v.nx * speed;
     c.vy = v.ny * speed;
     G.shotEnergy = 0.5 * c.mass * speed * speed;   // energy held constant all turn
     G.perpetual = true;
+    G.shotClock = 0;
     G.stats.shots++;
     G.pottedThisShot = 0;
     G.track = [{ x: c.x, y: c.y }];
     G.ghosts = null; G.ghostKey = '';
-    G.slowmo = 0.55;                  // brief slow-mo so we "watch the sim" resolve
+    G.slowmo = 0.3;                   // brief slow-mo so we "watch the sim" resolve
     K.onShot(Math.atan2(v.ny, v.nx), v.power);
     CB.particles.spark(c.x, c.y, 14, speed * 0.5, '#bfe6ff');
     cam.addShake(2 + v.power * 3);
@@ -277,6 +279,20 @@
   // real balls and their shadow is exactly the deviation history forces — and
   // that is the causal complexity. A clean table has no scars, so the two worlds
   // stay identical (zero complexity); a scarred table drags them apart.
+  // How long a live shot may run before the Bureau loses interest. There is no
+  // friction, so nothing else ever ends a miss. Longer while a micro-universe is
+  // deployed, because watching particles fall into orbit is the point there.
+  const SHOT_CLOCK = 5;
+  const SHOT_CLOCK_ORBIT = 12;
+
+  // Slingshot power -> cue speed. Single source of truth: the real shot and the
+  // ghost-futures wave MUST agree, or the preview lies about where the ball goes,
+  // which is the one thing the probability wave promises not to do.
+  // Top speed is bounded by the substep budget: PH.step runs SUB=4 substeps at
+  // dt <= 0.033, so h <= 0.00825s. At 1300px/s a ball moves 10.7px per substep,
+  // comfortably inside the 14px ball radius — no tunnelling through contacts.
+  function shotSpeed(power01) { return 200 + power01 * 1100; }
+
   const DEV_CAP = 140;   // px, per ball — one chaotic collision can't max it alone
   function spawnShadow() {
     G.shadow = G.balls.map(b => ({
@@ -363,7 +379,7 @@
   const ZEROF = { fx: 0, fy: 0 };
 
   function simFan(cue, v, gravity, n) {
-    const baseSpeed = 140 + v.power * 940;
+    const baseSpeed = shotSpeed(v.power);
     const spread = 0.02 + v.power * 0.085;   // wider wave than before
     const base = Math.atan2(v.ny, v.nx);
     const paths = [];
@@ -381,28 +397,60 @@
     return { paths, field, baseSpeed };
   }
 
-  let lastGhostTime = -1;
+  // The two-pass wave is by far the most expensive thing the game does, and it
+  // runs while aiming — every frame the aim changes. On a slow machine a full
+  // recompute can cost ~80ms, which is longer than the old fixed 45ms throttle,
+  // so the floor never bound and aiming collapsed to ~12fps. Both the quality
+  // and the interval now adapt to the measured cost, in real time (not game
+  // time, which is dt-capped and therefore lies on a slow machine).
+  const GHOST_N_MIN = 12;
+  const P1_N_MIN = 8;
+  // One 60fps frame is 16.7ms. Budget just under that: a machine that can afford
+  // the full wave inside a frame should keep all of it — an earlier 12ms budget
+  // silently halved the trajectory count on hardware that was coping fine.
+  const WAVE_BUDGET = 0.016;        // seconds
+  let waveScale = 1;                // 0.25..1 quality, adapts to the machine
+  let lastGhostCost = 0;            // seconds the previous recompute took
+  let lastGhostAt = -1e9;           // performance.now() ms of the previous recompute
+  const nowMs = () => (typeof performance !== 'undefined' && performance.now)
+    ? performance.now() : Date.now();
+
   function computeGhosts(cue, v) {
     const key = (v.nx * 100 | 0) + ':' + (v.ny * 100 | 0) + ':' + (v.power * 100 | 0);
     if (G.ghostKey === key && G.ghosts) return G.ghosts;
-    // Throttle the (heavy) two-pass recompute; reuse the cloud between ticks.
-    if (G.ghosts && G.time - lastGhostTime < 0.045) return G.ghosts;
-    lastGhostTime = G.time;
+    // Never let the wave eat the frame. Wait 4x its own measured cost between
+    // recomputes, so it can account for at most ~1/4 of the time budget. A
+    // smaller multiplier is useless on a slow machine, where the frame is
+    // already longer than the gap and the wave would run every frame anyway.
+    const t = nowMs();
+    const minGapMs = Math.max(45, lastGhostCost * 4000);
+    if (G.ghosts && t - lastGhostAt < minGapMs) return G.ghosts;
+    lastGhostAt = t;
     G.ghostKey = key;
 
+    const n1 = Math.max(P1_N_MIN, Math.round(P1_N * waveScale));
+    const n2 = Math.max(GHOST_N_MIN, Math.round(GHOST_N * waveScale));
+
     // Pass 1: coarse unfocused wave -> density field.
-    const p1 = simFan(cue, v, null, P1_N);
+    const p1 = simFan(cue, v, null, n1);
     // Pass 2: full wave, now gravitating toward pass-1 density -> self-focused.
     const grav = fieldForce(p1.field, 620);
-    const p2 = simFan(cue, v, grav, GHOST_N);
+    const p2 = simFan(cue, v, grav, n2);
 
     const main = PH.simulate(G.balls, cue.id, v.nx * p2.baseSpeed, v.ny * p2.baseSpeed,
       90, GDT, K.wells, scarFn, grav);
 
     G.ghosts = { paths: p2.paths, field: p2.field, main: main.path,
                  gx: DGX, gy: DGY, cell: DCELL };
+
+    lastGhostCost = (nowMs() - t) / 1000;
+    // Shed detail on a machine that can't afford it; take it back when it can.
+    if (lastGhostCost > WAVE_BUDGET) waveScale = Math.max(0.25, waveScale * 0.8);
+    else if (lastGhostCost < WAVE_BUDGET * 0.5) waveScale = Math.min(1, waveScale * 1.08);
     return G.ghosts;
   }
+  // Exposed so the test harness can assert the wave adapts under load.
+  G.waveStats = () => ({ scale: waveScale, cost: lastGhostCost });
 
   // ---- Physics hooks ---------------------------------------------------------
   const hooks = {
@@ -703,11 +751,20 @@
         stepShadow(dt);                        // complexity = deviation from the shadow
         // A pot (or scratch) is what ends constant motion — freeze and resolve.
         if ((G.pottedThisShot > 0 || G.scratched) && !K.doomed && !M.doomed) resolveTurn();
+        else if (!K.doomed && !M.doomed) {
+          // Frictionless motion never stops on its own, so a miss would run
+          // forever while the player watched. Give the shot a clock.
+          G.shotClock += dt;
+          if (G.shotClock > (K.wells.length ? SHOT_CLOCK_ORBIT : SHOT_CLOCK)) {
+            say('Shot abandoned. The particles are still moving; they are simply no longer your jurisdiction, goof.', 'warn');
+            resolveTurn();
+          }
+        }
       }
 
       // A gravity well can set resting balls in motion (moving an inert particle).
       if (G.state === 'aim' && !PH.ballsAtRest(G.balls)) {
-        G.state = 'shot'; G.perpetual = false; spawnShadow();
+        G.state = 'shot'; G.perpetual = false; G.shotClock = 0; spawnShadow();
       }
     } else if (G.state === 'collapse') {
       G.collapse.t += dt;
@@ -770,11 +827,38 @@
     say('We fished you back out of the pocket. Again. Try to stay in the universe, goof.', 'warn');
   }
 
+  // Rule 1's meter can only move if history has force behind it: complexity is
+  // deviation from the predicted Newtonian path, and only the scar field bends
+  // balls off that path. Sectors with scarMult 0 therefore pin it at zero, which
+  // would otherwise read as "you are safely passing" rather than "not in force".
+  function rule1Armed() {
+    return M.scarStrength > 0 && !!K.cfg && (K.cfg.complexityMult || 0) > 0;
+  }
+
+  // One regulatory gauge: bar fill, raw value / threshold, and a status word.
+  // A rule that isn't armed this sector is shown unpowered rather than as a
+  // reassuring zero.
+  function setGauge(prefix, risk, value, threshold, armed) {
+    $(prefix + '-fill').style.width = Math.min(100, risk * 100) + '%';
+    const val = $(prefix + '-val'), stat = $(prefix + '-stat'), row = $(prefix + '-row');
+    if (!isFinite(threshold) || armed === false) {
+      row.classList.add('offline');
+      val.textContent = '— / —';
+      stat.textContent = 'OFFLINE';
+      stat.className = 'stat';
+      return;
+    }
+    row.classList.remove('offline');
+    val.textContent = value.toFixed(1) + ' / ' + threshold;
+    stat.textContent = risk < 0.62 ? 'STABLE' : risk < 0.96 ? 'ELEVATED' : 'CRITICAL';
+    stat.className = 'stat ' + (risk < 0.62 ? 'ok' : risk < 0.96 ? 'warn' : 'crit');
+  }
+
   function updateMeter() {
     const r = Math.max(K.risk(), M.risk());
     if (r > G.levelPeakRisk) G.levelPeakRisk = r;   // for the tidiness grade
-    $('meter-fill').style.width = Math.min(100, K.risk() * 100) + '%';
-    $('onto-fill').style.width = Math.min(100, M.risk() * 100) + '%';
+    setGauge('meter', K.risk(), K.complexity, K.threshold, rule1Armed());
+    setGauge('onto', M.risk(), M.ontology, M.threshold);
     const it = $('iter-readout');
     if (G.state === 'cine_mandel') { it.classList.remove('hidden'); return; }
     if (K.iter > 20) {
@@ -796,7 +880,12 @@
     c.fillStyle = 'rgba(140,170,200,0.5)';
     c.font = '10px "Courier New", monospace';
     c.textAlign = 'center';
-    c.fillText('TABLE CERTIFIED FOR RECREATIONAL CAUSALITY — BUREAU OF RECREATIONAL COSMOLOGY — MAX 1 UNIVERSE (1)', T.x + T.w / 2, T.y + T.h + 47);
+    // Engraved on the bottom rail itself — below the rail it collided with the
+    // regulatory meter panel. Split into two plates so the centre pocket sits
+    // between them instead of through the lettering.
+    const plateY = T.y + T.h + 25;
+    c.fillText('TABLE CERTIFIED FOR RECREATIONAL CAUSALITY', T.x + T.w * 0.26, plateY);
+    c.fillText('BUREAU OF RECREATIONAL COSMOLOGY — MAX 1 UNIVERSE (1)', T.x + T.w * 0.74, plateY);
 
     // Felt: deep space green-blue.
     const g = c.createRadialGradient(T.x + T.w / 2, T.y + T.h / 2, 80, T.x + T.w / 2, T.y + T.h / 2, 620);

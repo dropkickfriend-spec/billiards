@@ -1,0 +1,39 @@
+name: smoke
+
+on:
+  # Only main on push — branch pushes are covered by pull_request, and listing
+  # both ran every PR commit twice.
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: test/package-lock.json
+
+      - name: Install harness
+        working-directory: test
+        run: npm ci
+
+      # The game loads over file:// with no server, so Chromium is the only
+      # thing CI needs beyond Node.
+      - name: Install Chromium
+        working-directory: test
+        run: npx playwright install --with-deps chromium
+
+      - name: Smoke test
+        working-directory: test
+        run: npm test
